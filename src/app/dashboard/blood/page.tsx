@@ -199,7 +199,7 @@ export default function BloodAnalysisPage() {
             {STEPS.map((step, i) => {
               const Icon = step.icon
               const isActive = status === 'running' && activeStep === i + 1
-              const isDone = (status === 'running' && activeStep > i + 1) || status === 'complete'
+              const isDone = status === 'running' && activeStep > i + 1
               
               return (
                 <div 
