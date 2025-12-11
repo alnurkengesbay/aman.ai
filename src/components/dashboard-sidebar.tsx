@@ -83,7 +83,7 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
       <aside className="fixed left-0 top-0 h-screen w-64 bg-background border-r border-border z-40 hidden lg:flex flex-col">
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-border">
-          <Link href="/dashboard">
+          <Link href="/">
             <Logo size="default" />
           </Link>
         </div>

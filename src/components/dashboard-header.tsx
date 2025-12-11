@@ -37,7 +37,7 @@ export function DashboardHeader({ title }: DashboardHeaderProps) {
 
           {/* Mobile logo */}
           <div className="lg:hidden">
-            <Link href="/dashboard">
+            <Link href="/">
               <Logo size="sm" />
             </Link>
           </div>
