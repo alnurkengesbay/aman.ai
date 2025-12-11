@@ -1,15 +1,72 @@
 export const services = [
+  // MRI Analysis Services
   {
-    id: "ct-mri",
-    title: "CT/MRI Анализ",
-    description: "Анализ медицинских изображений с помощью ИИ",
-    longDescription: "Deep Learning анализ снимков мозга для ранней диагностики нейродегенеративных заболеваний",
+    id: "mri-class-static",
+    title: "MRI Классификация (Static)",
+    description: "Статическая классификация МРТ снимков",
+    longDescription: "Deep Learning классификация МРТ изображений для диагностики нейродегенеративных заболеваний",
     iconName: "Scan",
-    href: "/dashboard/ct-mri",
-    embedUrl: null, // URL сервиса от команды S1
-    team: ["Murat", "Adilet"],
+    href: "/dashboard/mri-class-static",
+    embedUrl: "https://class-stat.aman-ai.kz",
+    team: ["Murat"],
     status: "active" as const,
   },
+  {
+    id: "mri-class-adaptive",
+    title: "MRI Классификация (Adaptive)",
+    description: "Адаптивная классификация МРТ снимков",
+    longDescription: "Адаптивная Deep Learning классификация с обучением на новых данных",
+    iconName: "Scan",
+    href: "/dashboard/mri-class-adaptive",
+    embedUrl: "https://class-adap.aman-ai.kz",
+    team: ["Murat"],
+    status: "active" as const,
+  },
+  {
+    id: "mri-seg-static",
+    title: "MRI Сегментация (Static)",
+    description: "Статическая сегментация МРТ снимков",
+    longDescription: "Сегментация областей мозга для выявления патологий",
+    iconName: "Brain",
+    href: "/dashboard/mri-seg-static",
+    embedUrl: "https://seg-stat.aman-ai.kz",
+    team: ["Murat"],
+    status: "active" as const,
+  },
+  {
+    id: "mri-seg-adaptive",
+    title: "MRI Сегментация (Adaptive)",
+    description: "Адаптивная сегментация МРТ снимков",
+    longDescription: "Адаптивная сегментация с постоянным улучшением модели",
+    iconName: "Brain",
+    href: "/dashboard/mri-seg-adaptive",
+    embedUrl: "https://seg-adap.aman-ai.kz",
+    team: ["Murat"],
+    status: "active" as const,
+  },
+  {
+    id: "ml-static",
+    title: "ML Анализ (Static)",
+    description: "Статический ML анализ данных",
+    longDescription: "Машинное обучение для анализа медицинских данных",
+    iconName: "Cpu",
+    href: "/dashboard/ml-static",
+    embedUrl: "https://ml-stat.aman-ai.kz",
+    team: ["Adilet"],
+    status: "active" as const,
+  },
+  {
+    id: "ml-adaptive",
+    title: "ML Анализ (Adaptive)",
+    description: "Адаптивный ML анализ данных",
+    longDescription: "Адаптивное машинное обучение с автоматической донастройкой",
+    iconName: "Cpu",
+    href: "/dashboard/ml-adaptive",
+    embedUrl: "https://ml-adap.aman-ai.kz",
+    team: ["Adilet"],
+    status: "active" as const,
+  },
+  // IoT & Questionnaire
   {
     id: "iot",
     title: "IoT Мониторинг",
@@ -17,7 +74,7 @@ export const services = [
     longDescription: "PPG, IMU, EMG сенсоры для мониторинга стресса и состояния нервной системы",
     iconName: "Activity",
     href: "/dashboard/iot",
-    embedUrl: null, // URL сервиса от команды S2
+    embedUrl: null,
     team: ["Mukhammedzhan"],
     status: "active" as const,
   },
@@ -28,10 +85,22 @@ export const services = [
     longDescription: "AI-анализ опросников для оценки уровня стресса и риска заболеваний",
     iconName: "ClipboardList",
     href: "/dashboard/questionnaire",
-    embedUrl: null, // URL сервиса от команды S3
+    embedUrl: null,
     team: ["Mukhammedzhan"],
     status: "active" as const,
   },
+  {
+    id: "cv-analysis",
+    title: "CV Анализ",
+    description: "Computer Vision анализ движений",
+    longDescription: "Анализ движений и поз с помощью компьютерного зрения",
+    iconName: "Eye",
+    href: "/dashboard/cv-analysis",
+    embedUrl: null,
+    team: ["Mukhammedzhan"],
+    status: "active" as const,
+  },
+  // Genetics & Blood
   {
     id: "genetics",
     title: "Генетический анализ",
@@ -40,7 +109,7 @@ export const services = [
     iconName: "Dna",
     href: "/dashboard/genetics",
     embedUrl: null,
-    team: ["Bekzat", "Kaisar"],
+    team: ["Samiullah", "Alnur"],
     status: "active" as const,
   },
   {
@@ -51,9 +120,10 @@ export const services = [
     iconName: "Droplets",
     href: "/dashboard/blood",
     embedUrl: null,
-    team: ["Nursultan", "Damir"],
+    team: ["Samiullah", "Alnur"],
     status: "active" as const,
   },
+  // Rehabilitation
   {
     id: "rehabilitation",
     title: "Реабилитация",
@@ -61,7 +131,7 @@ export const services = [
     longDescription: "YOLO и Computer Vision для отслеживания движений и персонализированной нейрореабилитации",
     iconName: "HeartPulse",
     href: "/dashboard/rehabilitation",
-    embedUrl: null, // URL сервиса от команды S6
+    embedUrl: null,
     team: ["Murat", "Adilet"],
     status: "active" as const,
   },
@@ -69,3 +139,4 @@ export const services = [
 
 export type Service = typeof services[number]
 export type ServiceStatus = "active" | "coming" | "maintenance"
+

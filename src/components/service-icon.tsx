@@ -1,6 +1,6 @@
 "use client"
 
-import { Scan, Activity, ClipboardList, Dna, Droplets, HeartPulse, LucideIcon } from "lucide-react"
+import { Scan, Activity, ClipboardList, Dna, Droplets, HeartPulse, Brain, Cpu, Eye, LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const iconMap: Record<string, LucideIcon> = {
@@ -10,6 +10,9 @@ const iconMap: Record<string, LucideIcon> = {
   Dna,
   Droplets,
   HeartPulse,
+  Brain,
+  Cpu,
+  Eye,
 }
 
 interface ServiceIconProps {
