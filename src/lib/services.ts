@@ -85,7 +85,7 @@ export const services = [
     longDescription: "Анализ движений и поз с помощью компьютерного зрения",
     iconName: "PersonStanding",
     href: "/dashboard/cv-analysis",
-    embedUrl: "https://phoenixai.com.kz",
+    embedUrl: "https://cv.amanai.com.kz",
     team: ["Mukhammedzhan"],
     status: "active" as const,
   },
