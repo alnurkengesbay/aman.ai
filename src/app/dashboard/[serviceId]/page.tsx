@@ -48,7 +48,7 @@ export default async function ServicePage({
                 </div>
               </div>
             </div>
-            {service.status === "coming" && (
+            {(service.status as string) === "coming" && (
               <span className="px-3 py-1 text-xs rounded-full bg-secondary text-muted-foreground">
                 Скоро
               </span>
