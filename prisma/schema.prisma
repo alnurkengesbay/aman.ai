@@ -1,0 +1,346 @@
+// Aman AI Platform - Database Schema
+// https://amanai.kz
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTH
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?
+  name          String?
+  image         String?
+  role          Role      @default(PATIENT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  patient       Patient?
+  doctor        Doctor?
+  accounts      Account[]
+  sessions      Session[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================
+// PATIENT PROFILE
+// ============================================
+
+model Patient {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  dateOfBirth DateTime?
+  gender      Gender?
+  phone       String?
+  address     String?
+  
+  // Medical info
+  bloodType   String?
+  allergies   String[]
+  conditions  String[]  // Existing medical conditions
+  medications String[]  // Current medications
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  analyses    Analysis[]
+  iotSessions IotSession[]
+  questionnaires QuestionnaireResult[]
+  reports     HealthReport[]
+  assignedDoctors DoctorPatient[]
+
+  @@map("patients")
+}
+
+// ============================================
+// DOCTOR PROFILE
+// ============================================
+
+model Doctor {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  specialization String?
+  licenseNumber  String?
+  hospital       String?
+  bio            String?  @db.Text
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patients       DoctorPatient[]
+  reviews        AnalysisReview[]
+  reports        HealthReport[]
+
+  @@map("doctors")
+}
+
+model DoctorPatient {
+  id        String   @id @default(cuid())
+  doctorId  String
+  patientId String
+  assignedAt DateTime @default(now())
+  
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, patientId])
+  @@map("doctor_patients")
+}
+
+// ============================================
+// AI ANALYSES (from S1-S6 services)
+// ============================================
+
+model Analysis {
+  id          String         @id @default(cuid())
+  patientId   String
+  serviceType ServiceType
+  
+  // Input data
+  inputData   Json?          // Metadata about uploaded files/data
+  fileUrl     String?        // URL to uploaded file (CT/MRI scan, etc.)
+  
+  // AI Results
+  status      AnalysisStatus @default(PENDING)
+  result      Json?          // AI analysis result
+  confidence  Float?         // AI confidence score (0-1)
+  riskLevel   RiskLevel?
+  findings    String[]       // Key findings
+  
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  completedAt DateTime?
+
+  // Relations
+  patient     Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  review      AnalysisReview?
+
+  @@map("analyses")
+}
+
+model AnalysisReview {
+  id          String   @id @default(cuid())
+  analysisId  String   @unique
+  doctorId    String
+  
+  verified    Boolean  @default(false) // Doctor confirms AI result
+  notes       String?  @db.Text        // Doctor's notes
+  diagnosis   String?                   // Final diagnosis
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  analysis    Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  doctor      Doctor   @relation(fields: [doctorId], references: [id])
+
+  @@map("analysis_reviews")
+}
+
+// ============================================
+// IOT MONITORING (S2)
+// ============================================
+
+model IotSession {
+  id          String      @id @default(cuid())
+  patientId   String
+  
+  startedAt   DateTime    @default(now())
+  endedAt     DateTime?
+  duration    Int?        // Duration in seconds
+  
+  // Aggregated data
+  avgHeartRate   Int?
+  avgStressLevel Float?
+  avgSpO2        Float?
+  
+  // Detailed readings
+  readings    IotReading[]
+  
+  // Relations
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("iot_sessions")
+}
+
+model IotReading {
+  id          String     @id @default(cuid())
+  sessionId   String
+  timestamp   DateTime   @default(now())
+  
+  // PPG data
+  heartRate   Int?
+  hrvSdnn     Float?
+  hrvRmssd    Float?
+  spO2        Float?
+  
+  // Stress
+  stressLevel Float?     // 0-100
+  
+  // IMU data
+  acceleration Json?     // {x, y, z}
+  gyroscope    Json?     // {x, y, z}
+  
+  // EMG data
+  muscleActivity Float?
+  
+  session     IotSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("iot_readings")
+}
+
+// ============================================
+// QUESTIONNAIRES (S3)
+// ============================================
+
+model QuestionnaireResult {
+  id              String   @id @default(cuid())
+  patientId       String
+  questionnaireId String   // ID of questionnaire template (PSS-10, MMSE, etc.)
+  
+  answers         Json     // {questionId: answer}
+  
+  // Calculated scores
+  totalScore      Int?
+  category        String?  // "low", "moderate", "high"
+  percentile      Float?
+  
+  // AI insights
+  insights        String[]
+  recommendations String[]
+  
+  createdAt       DateTime @default(now())
+
+  // Relations
+  patient         Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("questionnaire_results")
+}
+
+// ============================================
+// HEALTH REPORTS (Doctor's conclusions)
+// ============================================
+
+model HealthReport {
+  id          String   @id @default(cuid())
+  patientId   String
+  doctorId    String
+  
+  title       String
+  summary     String   @db.Text
+  diagnosis   String?
+  
+  // Recommendations
+  recommendations String[] 
+  medications     String[]
+  lifestyle       String[]
+  
+  // Follow-up
+  followUpDate    DateTime?
+  followUpNotes   String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor   @relation(fields: [doctorId], references: [id])
+
+  @@map("health_reports")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum Role {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum ServiceType {
+  CT_MRI        // S1
+  IOT           // S2
+  QUESTIONNAIRE // S3
+  GENETICS      // S4
+  BLOOD         // S5
+  REHABILITATION // S6
+}
+
+enum AnalysisStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVIEWED
+}
+
+enum RiskLevel {
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+}
