@@ -110,10 +110,13 @@ const ProteinViewer: React.FC<{ pdbContent: string; style: string }> = ({ pdbCon
   }, [pdbContent, style])
 
   return (
-    <div 
-      ref={containerRef} 
-      className="w-full h-[400px] rounded-xl border bg-[#1a1a2e] overflow-hidden"
-    />
+    <div className="w-full h-[400px] rounded-xl border bg-[#1a1a2e] overflow-hidden relative">
+      <div 
+        ref={containerRef} 
+        className="absolute inset-0"
+        style={{ width: '100%', height: '100%' }}
+      />
+    </div>
   )
 }
 
@@ -300,7 +303,7 @@ export default function GeneticsPage() {
 
         {/* 3D Structure */}
         {pdbContent && (
-          <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-6 animate-fade-up">
+          <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-6 animate-fade-up overflow-hidden">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-medium">Предсказанная 3D структура</h3>
               <div className="flex items-center gap-3">
@@ -324,7 +327,9 @@ export default function GeneticsPage() {
                 </Button>
               </div>
             </div>
-            <ProteinViewer pdbContent={pdbContent} style={visualStyle} />
+            <div className="w-full max-w-full overflow-hidden">
+              <ProteinViewer pdbContent={pdbContent} style={visualStyle} />
+            </div>
           </div>
         )}
 
