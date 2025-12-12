@@ -1,14 +1,12 @@
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { 
   TestTube, 
   UploadCloud, 
   Cpu, 
   TrendingUp,
   Check,
-  Activity,
-  Scan,
   Download,
   History,
   Brain,
@@ -16,7 +14,8 @@ import {
   CheckCircle2,
   Upload,
   FileText,
-  X
+  X,
+  Loader2
 } from 'lucide-react'
 import { 
   ResponsiveContainer, 
@@ -29,6 +28,18 @@ import {
 } from 'recharts'
 import { Button } from '@/components/ui/button'
 import { DashboardBackground } from '@/components/dashboard-background'
+
+interface BloodTestInput {
+  WBC: number
+  RBC: number
+  HGB: number
+  PLT: number
+  NEUT: number
+  LYMPH: number
+  MONO: number
+  EO: number
+  BASO: number
+}
 
 interface AnalysisStep {
   id: number
@@ -53,6 +64,53 @@ const RADAR_DATA = [
   { subject: 'Liver', A: 65, fullMark: 150 },
 ]
 
+// Field mappings for CSV parsing
+const FIELD_MAPPINGS: Record<string, keyof BloodTestInput> = {
+  'wbc': 'WBC', 'white blood cell': 'WBC',
+  'rbc': 'RBC', 'red blood cell': 'RBC',
+  'hgb': 'HGB', 'hemoglobin': 'HGB',
+  'plt': 'PLT', 'platelet': 'PLT',
+  'neut': 'NEUT', 'neutrophils': 'NEUT',
+  'lymph': 'LYMPH', 'lymphocytes': 'LYMPH',
+  'mono': 'MONO', 'monocytes': 'MONO',
+  'eo': 'EO', 'eosinophils': 'EO',
+  'baso': 'BASO', 'basophils': 'BASO',
+}
+
+const extractValue = (text: string): number | null => {
+  if (!text) return null
+  const cleaned = text.toString().replace(/[^\d.]/g, ' ').trim()
+  const match = cleaned.match(/[\d.]+/)
+  return match ? parseFloat(match[0]) : null
+}
+
+const findField = (text: string): keyof BloodTestInput | null => {
+  const lower = text.toLowerCase().trim()
+  for (const [key, value] of Object.entries(FIELD_MAPPINGS)) {
+    if (lower.includes(key)) return value
+  }
+  return null
+}
+
+const parseCSV = (content: string): Partial<BloodTestInput> => {
+  const data: Partial<BloodTestInput> = {}
+  const lines = content.split('\n').map(l => l.trim()).filter(l => l)
+  if (lines.length < 2) return data
+
+  const headers = lines[0].split(',').map(h => h.trim())
+  const values = lines[1].split(',').map(v => v.trim())
+
+  headers.forEach((header, idx) => {
+    const field = findField(header)
+    if (field && values[idx]) {
+      const value = extractValue(values[idx])
+      if (value !== null) data[field] = value
+    }
+  })
+
+  return data
+}
+
 const BIOMARKERS = [
   { name: 'Hs-CRP', value: '3.5', unit: 'mg/L', status: 'High', ref: '< 2.0', desc: 'Inflammation Marker' },
   { name: 'HbA1c', value: '5.7', unit: '%', status: 'Warning', ref: '< 5.7', desc: 'Blood Glucose Avg' },
@@ -62,15 +120,38 @@ const BIOMARKERS = [
 ]
 
 export default function BloodAnalysisPage() {
-  const [status, setStatus] = useState<'idle' | 'running' | 'complete'>('idle')
+  const [status, setStatus] = useState<'idle' | 'running' | 'complete' | 'error'>('idle')
   const [activeStep, setActiveStep] = useState(0)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [parsedData, setParsedData] = useState<Partial<BloodTestInput> | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setUploadedFile(file)
+  const handleFileUpload = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setError('Пожалуйста, загрузите CSV файл')
+      return
+    }
+
+    setUploadedFile(file)
+    setError(null)
+
+    try {
+      const content = await file.text()
+      const data = parseCSV(content)
+      
+      const requiredFields: (keyof BloodTestInput)[] = ['WBC', 'RBC', 'HGB', 'PLT']
+      const found = requiredFields.filter(f => data[f] !== undefined)
+      
+      if (found.length === 0) {
+        setError('Не найдены данные анализа крови. Убедитесь что CSV содержит колонки: WBC, RBC, HGB, PLT и др.')
+        return
+      }
+
+      setParsedData(data)
+    } catch (err) {
+      setError('Ошибка при чтении файла')
     }
   }
 
@@ -78,9 +159,7 @@ export default function BloodAnalysisPage() {
     e.preventDefault()
     setIsDragging(false)
     const file = e.dataTransfer.files?.[0]
-    if (file) {
-      setUploadedFile(file)
-    }
+    if (file) handleFileUpload(file)
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -88,35 +167,42 @@ export default function BloodAnalysisPage() {
     setIsDragging(true)
   }
 
-  const handleDragLeave = () => {
-    setIsDragging(false)
-  }
+  const handleDragLeave = () => setIsDragging(false)
 
   const removeFile = () => {
     setUploadedFile(null)
+    setParsedData(null)
+    setError(null)
   }
 
   useEffect(() => {
     if (status === 'running') {
-      let currentStep = 0
-      const stepInterval = setInterval(() => {
-        currentStep++
-        setActiveStep(currentStep)
-
-        if (currentStep >= STEPS.length + 1) {
-          clearInterval(stepInterval)
+      let step = 0
+      const interval = setInterval(() => {
+        step++
+        setActiveStep(step)
+        if (step >= STEPS.length + 1) {
+          clearInterval(interval)
           setStatus('complete')
         }
       }, 1000)
-
-      return () => clearInterval(stepInterval)
+      return () => clearInterval(interval)
     } else if (status === 'idle') {
       setActiveStep(0)
     }
   }, [status])
 
-  const startDemo = () => setStatus('running')
-  const resetDemo = () => setStatus('idle')
+  const startAnalysis = () => {
+    setError(null)
+    setStatus('running')
+  }
+
+  const resetDemo = () => {
+    setStatus('idle')
+    setUploadedFile(null)
+    setParsedData(null)
+    setError(null)
+  }
 
   const handleDownloadReport = async () => {
     const { jsPDF } = await import('jspdf')
@@ -128,29 +214,27 @@ export default function BloodAnalysisPage() {
     
     doc.setFontSize(10)
     doc.setTextColor(100, 116, 139)
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 28)
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 28)
+    
+    if (parsedData) {
+      doc.setFontSize(14)
+      doc.setTextColor(15, 23, 42)
+      doc.text("Загруженные данные:", 20, 45)
+      
+      let yPos = 55
+      Object.entries(parsedData).forEach(([key, value]) => {
+        doc.setFontSize(11)
+        doc.text(`${key}: ${value}`, 20, yPos)
+        yPos += 8
+      })
+    }
     
     doc.setFontSize(14)
-    doc.setTextColor(15, 23, 42)
-    doc.text("Clinical Summary", 20, 45)
+    doc.text("Biomarker Analysis:", 20, parsedData ? 120 : 50)
     
-    doc.setFontSize(11)
-    doc.setTextColor(71, 85, 105)
-    const summaryLines = doc.splitTextToSize(
-      "Patient shows signs of inflammatory stress (Elevated Hs-CRP). Combined with low Vitamin D, this suggests a need for immune system modulation.", 
-      170
-    )
-    doc.text(summaryLines, 20, 55)
-    
-    let yPos = 85
-    doc.setFontSize(14)
-    doc.setTextColor(15, 23, 42)
-    doc.text("Biomarker Analysis", 20, yPos)
-    
-    yPos += 15
+    let yPos = parsedData ? 130 : 60
     BIOMARKERS.forEach((marker) => {
       doc.setFontSize(11)
-      doc.setTextColor(15, 23, 42)
       doc.text(`${marker.name}: ${marker.value} ${marker.unit} (${marker.status})`, 20, yPos)
       yPos += 10
     })
@@ -158,8 +242,8 @@ export default function BloodAnalysisPage() {
     doc.save("AmanAI_Blood_Analysis_Report.pdf")
   }
 
-  const getStatusBadgeStyles = (status: string) => {
-    switch(status) {
+  const getStatusBadgeStyles = (s: string) => {
+    switch(s) {
       case 'High': return 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-400 dark:border-red-800'
       case 'Low': return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800'
       case 'Warning': return 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-800'
@@ -178,8 +262,8 @@ export default function BloodAnalysisPage() {
             AI Blood Analysis
           </h1>
           <p className="text-muted-foreground max-w-2xl">
-            AI анализирует более 50 биомаркеров крови, выявляя скрытые паттерны воспаления, 
-            гормональных изменений и метаболических рисков.
+            AI анализирует биомаркеры крови, выявляя паттерны воспаления, 
+            гормональных изменений и метаболических рисков. Загрузите CSV файл с результатами анализа.
           </p>
         </div>
 
@@ -207,6 +291,7 @@ export default function BloodAnalysisPage() {
                     <p className="font-medium">{uploadedFile.name}</p>
                     <p className="text-sm text-muted-foreground">
                       {(uploadedFile.size / 1024).toFixed(1)} KB
+                      {parsedData && ` • ${Object.keys(parsedData).length} параметров найдено`}
                     </p>
                   </div>
                 </div>
@@ -221,13 +306,14 @@ export default function BloodAnalysisPage() {
                 </div>
                 <p className="font-medium mb-1">Загрузить результаты анализа крови</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  PDF, CSV, или изображения (до 20 MB)
+                  CSV файл с данными (WBC, RBC, HGB, PLT, NEUT, LYMPH и др.)
                 </p>
                 <input 
+                  ref={fileInputRef}
                   type="file" 
                   className="hidden" 
-                  accept=".pdf,.csv,.jpg,.jpeg,.png,.txt"
-                  onChange={handleFileUpload}
+                  accept=".csv"
+                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                 />
                 <span className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
                   Выбрать файл
@@ -235,19 +321,39 @@ export default function BloodAnalysisPage() {
               </label>
             )}
           </div>
+
+          {error && (
+            <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-red-500">{error}</p>
+            </div>
+          )}
+
+          {parsedData && Object.keys(parsedData).length > 0 && (
+            <div className="mt-4 p-4 bg-muted/50 rounded-xl">
+              <p className="text-sm font-medium mb-2">Найденные параметры:</p>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(parsedData).map(([key, value]) => (
+                  <span key={key} className="px-3 py-1 bg-background border rounded-lg text-xs">
+                    {key}: {value}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-3 animate-fade-up stagger-1">
           {status === 'running' && (
             <div className="px-4 py-2 bg-background/80 backdrop-blur-sm border rounded-xl text-sm font-medium flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <Loader2 className="w-4 h-4 animate-spin" />
               Обработка...
             </div>
           )}
           {status === 'complete' && (
             <div className="px-4 py-2 bg-background/80 backdrop-blur-sm border rounded-xl text-sm font-medium flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
               Анализ завершён
             </div>
           )}
@@ -266,22 +372,23 @@ export default function BloodAnalysisPage() {
               </Button>
             </>
           )}
-          <Button 
-            variant={status === 'idle' ? 'default' : 'outline'}
-            onClick={startDemo}
-            disabled={status === 'running' || status === 'complete'}
-            className="gap-2"
-          >
-            {status === 'running' ? (
-              <Activity className="w-4 h-4 animate-spin" />
-            ) : (
-              <Scan className="w-4 h-4" />
-            )}
-            {status === 'running' ? 'Анализ...' : status === 'complete' ? 'Завершено' : 'Начать анализ'}
-          </Button>
+          {status !== 'complete' && (
+            <Button 
+              onClick={startAnalysis}
+              disabled={status === 'running'}
+              className="gap-2"
+            >
+              {status === 'running' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <TrendingUp className="w-4 h-4" />
+              )}
+              {status === 'running' ? 'Анализ...' : 'Начать анализ'}
+            </Button>
+          )}
         </div>
 
-        {/* Steps (Idle/Running) */}
+        {/* Steps */}
         {(status === 'idle' || status === 'running') && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-up stagger-2">
             {STEPS.map((step, i) => {
@@ -319,28 +426,18 @@ export default function BloodAnalysisPage() {
           </div>
         )}
 
-        {/* Results (Complete) */}
+        {/* Results */}
         {status === 'complete' && (
           <div className="space-y-6 animate-fade-up">
-            {/* Summary Card */}
+            {/* Summary */}
             <div className="bg-background/60 backdrop-blur-sm p-6 rounded-2xl border flex flex-col lg:flex-row gap-8 items-center">
               <div className="h-64 w-full lg:w-72 flex-shrink-0">
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart cx="50%" cy="50%" outerRadius="70%" data={RADAR_DATA}>
                     <PolarGrid stroke="hsl(var(--border))" />
-                    <PolarAngleAxis 
-                      dataKey="subject" 
-                      tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} 
-                    />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
                     <PolarRadiusAxis angle={30} domain={[0, 150]} tick={false} axisLine={false} />
-                    <Radar 
-                      name="Patient" 
-                      dataKey="A" 
-                      stroke="hsl(var(--primary))" 
-                      strokeWidth={2} 
-                      fill="hsl(var(--primary))" 
-                      fillOpacity={0.2} 
-                    />
+                    <Radar name="Patient" dataKey="A" stroke="hsl(var(--primary))" strokeWidth={2} fill="hsl(var(--primary))" fillOpacity={0.2} />
                     <Tooltip />
                   </RadarChart>
                 </ResponsiveContainer>
@@ -366,21 +463,14 @@ export default function BloodAnalysisPage() {
               </div>
             </div>
 
-            {/* Biomarkers List */}
+            {/* Biomarkers */}
             <div className="grid gap-4">
               {BIOMARKERS.map((marker, i) => (
-                <div 
-                  key={i} 
-                  className="group bg-background/60 backdrop-blur-sm p-6 rounded-2xl border hover:border-primary/50 transition-all flex flex-col md:flex-row gap-6 items-start md:items-center"
-                >
+                <div key={i} className="group bg-background/60 backdrop-blur-sm p-6 rounded-2xl border hover:border-primary/50 transition-all flex flex-col md:flex-row gap-6 items-start md:items-center">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110 ${
                     marker.status === 'Normal' ? 'bg-muted text-muted-foreground' : 'bg-red-500/10 text-red-500'
                   }`}>
-                    {marker.status === 'Normal' ? (
-                      <CheckCircle2 className="w-6 h-6" />
-                    ) : (
-                      <AlertCircle className="w-6 h-6" />
-                    )}
+                    {marker.status === 'Normal' ? <CheckCircle2 className="w-6 h-6" /> : <AlertCircle className="w-6 h-6" />}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -396,13 +486,9 @@ export default function BloodAnalysisPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4">
-                    <span className={`px-3 py-1 border text-xs font-bold rounded-full ${getStatusBadgeStyles(marker.status)}`}>
-                      {marker.status === 'Normal' ? 'Норма' : 
-                       marker.status === 'High' ? 'Высокий' :
-                       marker.status === 'Low' ? 'Низкий' : 'Внимание'}
-                    </span>
-                  </div>
+                  <span className={`px-3 py-1 border text-xs font-bold rounded-full ${getStatusBadgeStyles(marker.status)}`}>
+                    {marker.status === 'Normal' ? 'Норма' : marker.status === 'High' ? 'Высокий' : marker.status === 'Low' ? 'Низкий' : 'Внимание'}
+                  </span>
                 </div>
               ))}
             </div>
@@ -412,4 +498,3 @@ export default function BloodAnalysisPage() {
     </div>
   )
 }
-
