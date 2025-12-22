@@ -142,13 +142,13 @@ ${report.summary}
     const sections: { title: string; content: string; iconType: string }[] = []
     
     const patterns = [
-      { regex: /ЖАЛПЫ ЖАҒДАЙ.*?ОБЩЕЕ СОСТОЯНИЕ[:\s]*(.*?)(?=ҰЙҚЫ|СОН|$)/is, title: "Жалпы жағдай", iconType: "heart" },
-      { regex: /ҰЙҚЫ.*?СОН[:\s]*(.*?)(?=КӨҢІЛ|НАСТРОЕНИЕ|$)/is, title: "Ұйқы", iconType: "moon" },
-      { regex: /КӨҢІЛ-КҮЙ.*?НАСТРОЕНИЕ[:\s]*(.*?)(?=СТРЕСС|$)/is, title: "Көңіл-күй", iconType: "brain" },
-      { regex: /СТРЕСС ДЕҢГЕЙІ.*?УРОВЕНЬ СТРЕССА[:\s]*(.*?)(?=ФИЗИКАЛЫҚ|ФИЗИЧЕСКИЕ|$)/is, title: "Стресс деңгейі", iconType: "activity" },
-      { regex: /ФИЗИКАЛЫҚ.*?ФИЗИЧЕСКИЕ СИМПТОМЫ[:\s]*(.*?)(?=КОГНИТИВТІ|КОГНИТИВНЫЕ|$)/is, title: "Физикалық симптомдар", iconType: "stethoscope" },
-      { regex: /ҚОРЫТЫНДЫ.*?ЗАКЛЮЧЕНИЕ[:\s]*(.*?)(?=ҰСЫНЫСТАР|РЕКОМЕНДАЦИИ|$)/is, title: "Қорытынды", iconType: "check" },
-      { regex: /ҰСЫНЫСТАР.*?РЕКОМЕНДАЦИИ[:\s]*(.*?)$/is, title: "Ұсыныстар", iconType: "file" },
+      { regex: /ЖАЛПЫ ЖАҒДАЙ[\s\S]*?ОБЩЕЕ СОСТОЯНИЕ[:\s]*([\s\S]*?)(?=ҰЙҚЫ|СОН|$)/i, title: "Жалпы жағдай", iconType: "heart" },
+      { regex: /ҰЙҚЫ[\s\S]*?СОН[:\s]*([\s\S]*?)(?=КӨҢІЛ|НАСТРОЕНИЕ|$)/i, title: "Ұйқы", iconType: "moon" },
+      { regex: /КӨҢІЛ-КҮЙ[\s\S]*?НАСТРОЕНИЕ[:\s]*([\s\S]*?)(?=СТРЕСС|$)/i, title: "Көңіл-күй", iconType: "brain" },
+      { regex: /СТРЕСС ДЕҢГЕЙІ[\s\S]*?УРОВЕНЬ СТРЕССА[:\s]*([\s\S]*?)(?=ФИЗИКАЛЫҚ|ФИЗИЧЕСКИЕ|$)/i, title: "Стресс деңгейі", iconType: "activity" },
+      { regex: /ФИЗИКАЛЫҚ[\s\S]*?ФИЗИЧЕСКИЕ СИМПТОМЫ[:\s]*([\s\S]*?)(?=КОГНИТИВТІ|КОГНИТИВНЫЕ|$)/i, title: "Физикалық симптомдар", iconType: "stethoscope" },
+      { regex: /ҚОРЫТЫНДЫ[\s\S]*?ЗАКЛЮЧЕНИЕ[:\s]*([\s\S]*?)(?=ҰСЫНЫСТАР|РЕКОМЕНДАЦИИ|$)/i, title: "Қорытынды", iconType: "check" },
+      { regex: /ҰСЫНЫСТАР[\s\S]*?РЕКОМЕНДАЦИИ[:\s]*([\s\S]*?)$/i, title: "Ұсыныстар", iconType: "file" },
     ]
     
     for (const { regex, title, iconType } of patterns) {
