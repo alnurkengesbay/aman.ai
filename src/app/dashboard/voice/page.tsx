@@ -56,9 +56,22 @@ export default function VoiceAssistantPage() {
     }
   }, [])
 
-  const startRecording = () => {
+  const startRecording = async () => {
     console.log("startRecording called")
     setError("")
+    
+    // First request microphone permission
+    try {
+      console.log("Requesting microphone permission...")
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      console.log("Microphone permission granted")
+      // Stop the stream immediately, we just needed permission
+      stream.getTracks().forEach(track => track.stop())
+    } catch (err) {
+      console.error("Microphone permission denied:", err)
+      setError("Доступ к микрофону запрещён. Разрешите в настройках браузера.")
+      return
+    }
     
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     console.log("SpeechRecognition available:", !!SpeechRecognition)
