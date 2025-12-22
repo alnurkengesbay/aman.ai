@@ -36,6 +36,8 @@ services:
       - AUTH_TRUST_HOST=true
       - NODE_ENV=production
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - YANDEX_API_KEY=${YANDEX_API_KEY:-}
+      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID:-}
     depends_on:
       db:
         condition: service_healthy

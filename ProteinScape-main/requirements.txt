@@ -1,0 +1,9 @@
+streamlit
+py3Dmol
+matplotlib
+seaborn
+pandas
+requests
+numpy
+stmol
+ipython-genutils

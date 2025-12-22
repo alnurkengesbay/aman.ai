@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth"
 import { redirect } from "next/navigation"
 import { DashboardSidebar } from "@/components/dashboard-sidebar"
 import { AIAssistant } from "@/components/ai-assistant"
+import { VoiceAssistant } from "@/components/voice-assistant"
 
 export default async function DashboardLayout({
   children,
@@ -21,6 +22,7 @@ export default async function DashboardLayout({
         {children}
       </main>
       <AIAssistant />
+      <VoiceAssistant />
     </div>
   )
 }
