@@ -66,38 +66,52 @@ export default function DoctorReportsPage() {
     }
   }
 
-  const downloadPDF = async () => {
+  const downloadReport = () => {
     if (!selectedReport) return
     
-    const reportElement = document.getElementById("report-content")
-    if (!reportElement) return
+    const filename = `AMAN_AI_Report_${selectedReport.patientName?.replace(/\s/g, "_") || "Patient"}_${new Date(selectedReport.createdAt).toISOString().split("T")[0]}.txt`
+    
+    const content = `
+═══════════════════════════════════════════════════════════════
+                    AMAN AI - ДЕНСАУЛЫҚ ЕСЕБІ
+                    ОТЧЁТ О ЗДОРОВЬЕ ПАЦИЕНТА
+═══════════════════════════════════════════════════════════════
 
-    try {
-      const html2canvas = (await import("html2canvas")).default
-      const { jsPDF } = await import("jspdf")
-      
-      const canvas = await html2canvas(reportElement, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff"
-      })
-      
-      const imgData = canvas.toDataURL("image/png")
-      const pdf = new jsPDF("p", "mm", "a4")
-      
-      const pdfWidth = pdf.internal.pageSize.getWidth()
-      const pdfHeight = pdf.internal.pageSize.getHeight()
-      const imgWidth = canvas.width
-      const imgHeight = canvas.height
-      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight)
-      const imgX = (pdfWidth - imgWidth * ratio) / 2
-      const imgY = 10
-      
-      pdf.addImage(imgData, "PNG", imgX, imgY, imgWidth * ratio, imgHeight * ratio)
-      pdf.save(`AMAN_AI_Report_${new Date(selectedReport.createdAt).toISOString().split("T")[0]}.pdf`)
-    } catch (err) {
-      console.error("PDF generation failed:", err)
-    }
+ПАЦИЕНТ: ${selectedReport.patientName || "Анонимный пациент"}
+ДАТА: ${new Date(selectedReport.createdAt).toLocaleString("kk-KZ")}
+ДЛИТЕЛЬНОСТЬ РАЗГОВОРА: ${selectedReport.callDuration ? Math.round(selectedReport.callDuration / 60) + " мин" : "—"}
+УРОВЕНЬ РИСКА: ${selectedReport.riskLevel || "LOW"}
+
+───────────────────────────────────────────────────────────────
+                       ОСНОВНЫЕ ПОКАЗАТЕЛИ
+───────────────────────────────────────────────────────────────
+
+• Общее самочувствие: ${selectedReport.generalWellbeing || "—"}/10
+• Качество сна: ${selectedReport.sleepQuality || "—"}
+• Настроение: ${selectedReport.moodState || "—"}
+• Уровень стресса: ${selectedReport.stressLevel || "—"}
+
+───────────────────────────────────────────────────────────────
+                         ПОЛНЫЙ ОТЧЁТ
+───────────────────────────────────────────────────────────────
+
+${selectedReport.summary}
+
+───────────────────────────────────────────────────────────────
+${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВНИМАНИЯ!\n" : ""}${selectedReport.requiresFollowup ? "📞 ТРЕБУЕТСЯ НАБЛЮДЕНИЕ\n" : ""}
+───────────────────────────────────────────────────────────────
+Отчёт сгенерирован AI • AMAN AI Platform • amanai.kz
+═══════════════════════════════════════════════════════════════
+    `.trim()
+
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" })
+    const link = document.createElement("a")
+    link.href = URL.createObjectURL(blob)
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(link.href)
   }
 
   const getRiskColor = (level: string | null) => {
@@ -288,7 +302,7 @@ export default function DoctorReportsPage() {
                           </p>
                         </div>
                         
-                        <Button onClick={downloadPDF} className="gap-2">
+                        <Button onClick={downloadReport} className="gap-2">
                           <Download className="w-4 h-4" />
                           Жүктеу
                         </Button>
