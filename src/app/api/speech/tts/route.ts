@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getIAMToken } from "@/lib/yandex-iam"
 
 const YANDEX_FOLDER_ID = process.env.YANDEX_FOLDER_ID || ""
-const YANDEX_API_KEY = process.env.YANDEX_API_KEY || ""
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,9 +11,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 })
     }
 
-    if (!YANDEX_FOLDER_ID || !YANDEX_API_KEY) {
-      console.error("Missing Yandex config:", { hasFolderId: !!YANDEX_FOLDER_ID, hasApiKey: !!YANDEX_API_KEY })
+    if (!YANDEX_FOLDER_ID) {
+      console.error("Missing YANDEX_FOLDER_ID")
       return NextResponse.json({ error: "Yandex not configured" }, { status: 500 })
+    }
+
+    let iamToken: string
+    try {
+      iamToken = await getIAMToken()
+    } catch (error) {
+      console.error("Failed to get IAM token:", error)
+      return NextResponse.json({ error: "Authentication failed" }, { status: 500 })
     }
 
     // Выбор голоса в зависимости от языка
@@ -22,13 +30,14 @@ export async function POST(req: NextRequest) {
       voice = "alena" // русский женский голос
     }
 
-    // Yandex SpeechKit TTS API for Kazakhstan region
+    // Yandex SpeechKit TTS API v3 for Kazakhstan
     const response = await fetch(
       "https://tts.api.ml.yandexcloud.kz/speech/v1/tts:synthesize",
       {
         method: "POST",
         headers: {
-          "Authorization": `Api-Key ${YANDEX_API_KEY}`,
+          "Authorization": `Bearer ${iamToken}`,
+          "x-folder-id": YANDEX_FOLDER_ID,
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: new URLSearchParams({
@@ -44,8 +53,8 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const error = await response.text()
-      console.error("Yandex TTS error:", error)
-      return NextResponse.json({ error: "Speech synthesis failed" }, { status: 500 })
+      console.error("Yandex TTS error:", response.status, error)
+      return NextResponse.json({ error: "Speech synthesis failed", details: error }, { status: 500 })
     }
 
     const audioBuffer = await response.arrayBuffer()

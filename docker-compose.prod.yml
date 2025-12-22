@@ -37,7 +37,9 @@ services:
       - NODE_ENV=production
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID:-}
-      - YANDEX_API_KEY=${YANDEX_API_KEY:-}
+      - YANDEX_SERVICE_ACCOUNT_ID=${YANDEX_SERVICE_ACCOUNT_ID:-}
+      - YANDEX_KEY_ID=${YANDEX_KEY_ID:-}
+      - YANDEX_PRIVATE_KEY=${YANDEX_PRIVATE_KEY:-}
     depends_on:
       db:
         condition: service_healthy

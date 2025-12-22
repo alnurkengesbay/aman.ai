@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getIAMToken } from "@/lib/yandex-iam"
 
 const YANDEX_FOLDER_ID = process.env.YANDEX_FOLDER_ID || ""
-const YANDEX_API_KEY = process.env.YANDEX_API_KEY || ""
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,20 +12,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No audio file" }, { status: 400 })
     }
 
-    if (!YANDEX_FOLDER_ID || !YANDEX_API_KEY) {
-      console.error("Missing Yandex config:", { hasFolderId: !!YANDEX_FOLDER_ID, hasApiKey: !!YANDEX_API_KEY })
+    if (!YANDEX_FOLDER_ID) {
+      console.error("Missing YANDEX_FOLDER_ID")
       return NextResponse.json({ error: "Yandex not configured" }, { status: 500 })
+    }
+
+    let iamToken: string
+    try {
+      iamToken = await getIAMToken()
+    } catch (error) {
+      console.error("Failed to get IAM token:", error)
+      return NextResponse.json({ error: "Authentication failed" }, { status: 500 })
     }
 
     const audioBuffer = await audioFile.arrayBuffer()
 
-    // Yandex SpeechKit STT API for Kazakhstan region
+    // Yandex SpeechKit STT API v3 for Kazakhstan
     const response = await fetch(
       `https://stt.api.ml.yandexcloud.kz/speech/v1/stt:recognize?folderId=${YANDEX_FOLDER_ID}&lang=kk-KZ&format=oggopus`,
       {
         method: "POST",
         headers: {
-          "Authorization": `Api-Key ${YANDEX_API_KEY}`,
+          "Authorization": `Bearer ${iamToken}`,
+          "x-folder-id": YANDEX_FOLDER_ID,
           "Content-Type": "audio/ogg",
         },
         body: audioBuffer,
@@ -34,8 +43,8 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const error = await response.text()
-      console.error("Yandex STT error:", error)
-      return NextResponse.json({ error: "Speech recognition failed" }, { status: 500 })
+      console.error("Yandex STT error:", response.status, error)
+      return NextResponse.json({ error: "Speech recognition failed", details: error }, { status: 500 })
     }
 
     const data = await response.json()
