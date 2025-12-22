@@ -22,9 +22,9 @@ export async function POST(req: NextRequest) {
       voice = "alena" // русский женский голос
     }
 
-    // Yandex SpeechKit TTS API with Api-Key
+    // Yandex SpeechKit TTS API for Kazakhstan region
     const response = await fetch(
-      "https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize",
+      "https://tts.api.ml.yandexcloud.kz/speech/v1/tts:synthesize",
       {
         method: "POST",
         headers: {

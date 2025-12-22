@@ -19,9 +19,9 @@ export async function POST(req: NextRequest) {
 
     const audioBuffer = await audioFile.arrayBuffer()
 
-    // Yandex SpeechKit STT API with Api-Key
+    // Yandex SpeechKit STT API for Kazakhstan region
     const response = await fetch(
-      `https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?folderId=${YANDEX_FOLDER_ID}&lang=kk-KZ&format=oggopus`,
+      `https://stt.api.ml.yandexcloud.kz/speech/v1/stt:recognize?folderId=${YANDEX_FOLDER_ID}&lang=kk-KZ&format=oggopus`,
       {
         method: "POST",
         headers: {
