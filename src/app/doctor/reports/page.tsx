@@ -129,6 +129,42 @@ ${report.summary}
     r.summary.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  // Parse summary into sections
+  const parseSummary = (summary: string): { title: string; content: string; iconType: string }[] | null => {
+    const sections: { title: string; content: string; iconType: string }[] = []
+    
+    const patterns = [
+      { regex: /ЖАЛПЫ ЖАҒДАЙ[\s\S]*?ОБЩЕЕ СОСТОЯНИЕ[:\s]*([\s\S]*?)(?=ҰЙҚЫ|СОН|$)/i, title: "Жалпы жағдай", iconType: "heart" },
+      { regex: /ҰЙҚЫ[\s\S]*?СОН[:\s]*([\s\S]*?)(?=КӨҢІЛ|НАСТРОЕНИЕ|$)/i, title: "Ұйқы", iconType: "moon" },
+      { regex: /КӨҢІЛ-КҮЙ[\s\S]*?НАСТРОЕНИЕ[:\s]*([\s\S]*?)(?=СТРЕСС|$)/i, title: "Көңіл-күй", iconType: "brain" },
+      { regex: /СТРЕСС ДЕҢГЕЙІ[\s\S]*?УРОВЕНЬ СТРЕССА[:\s]*([\s\S]*?)(?=ФИЗИКАЛЫҚ|ФИЗИЧЕСКИЕ|$)/i, title: "Стресс деңгейі", iconType: "activity" },
+      { regex: /ФИЗИКАЛЫҚ[\s\S]*?ФИЗИЧЕСКИЕ СИМПТОМЫ[:\s]*([\s\S]*?)(?=КОГНИТИВТІ|КОГНИТИВНЫЕ|$)/i, title: "Физикалық симптомдар", iconType: "stethoscope" },
+      { regex: /ҚОРЫТЫНДЫ[\s\S]*?ЗАКЛЮЧЕНИЕ[:\s]*([\s\S]*?)(?=ҰСЫНЫСТАР|РЕКОМЕНДАЦИИ|$)/i, title: "Қорытынды", iconType: "check" },
+      { regex: /ҰСЫНЫСТАР[\s\S]*?РЕКОМЕНДАЦИИ[:\s]*([\s\S]*?)$/i, title: "Ұсыныстар", iconType: "file" },
+    ]
+    
+    for (const { regex, title, iconType } of patterns) {
+      const match = summary.match(regex)
+      if (match && match[1]?.trim()) {
+        sections.push({ title, content: match[1].trim(), iconType })
+      }
+    }
+    
+    return sections.length > 0 ? sections : null
+  }
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case "heart": return <Heart className="w-4 h-4 text-rose-500" />
+      case "moon": return <Moon className="w-4 h-4 text-indigo-500" />
+      case "brain": return <Brain className="w-4 h-4 text-purple-500" />
+      case "activity": return <Activity className="w-4 h-4 text-amber-500" />
+      case "check": return <FileText className="w-4 h-4 text-emerald-500" />
+      case "file": return <FileText className="w-4 h-4 text-teal-500" />
+      default: return <FileText className="w-4 h-4 text-gray-500" />
+    }
+  }
+
   return (
     <>
       <DashboardHeader title="Пациент есептері" />
@@ -291,15 +327,27 @@ ${report.summary}
 
                     {/* Report Content */}
                     <div className="p-6">
-                      <h3 className="font-semibold mb-3 flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-emerald-500" />
-                        Толық есеп
-                      </h3>
-                      <div className="p-4 rounded-xl bg-muted/20 border">
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                          {selectedReport.summary}
-                        </p>
-                      </div>
+                      {parseSummary(selectedReport.summary) ? (
+                        <div className="space-y-4">
+                          {parseSummary(selectedReport.summary)?.map((section, idx) => (
+                            <div key={idx} className="p-4 rounded-xl bg-muted/20 border border-muted/30">
+                              <div className="flex items-center gap-2 mb-2">
+                                {getIcon(section.iconType)}
+                                <h4 className="font-semibold text-sm">{section.title}</h4>
+                              </div>
+                              <p className="text-sm text-muted-foreground leading-relaxed">
+                                {section.content}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-xl bg-muted/20 border">
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                            {selectedReport.summary}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Footer */}
