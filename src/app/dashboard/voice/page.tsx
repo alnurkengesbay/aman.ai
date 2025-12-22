@@ -1,8 +1,40 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Mic, MicOff, Volume2, Loader2, MessageSquare } from "lucide-react"
 import { DashboardBackground } from "@/components/dashboard-background"
+
+// Web Speech API types
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
+}
+
+interface SpeechRecognitionInstance extends EventTarget {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  start: () => void
+  stop: () => void
+  onstart: (() => void) | null
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognitionInstance
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: SpeechRecognitionConstructor
+    webkitSpeechRecognition: SpeechRecognitionConstructor
+  }
+}
 
 export default function VoiceAssistantPage() {
   const [isRecording, setIsRecording] = useState(false)
@@ -10,150 +42,138 @@ export default function VoiceAssistantPage() {
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [messages, setMessages] = useState<Array<{ role: "user" | "ai"; text: string }>>([])
   const [error, setError] = useState("")
+  const [isSupported, setIsSupported] = useState(true)
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
 
-  const startRecording = async () => {
-    try {
-      setError("")
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" })
-      
-      mediaRecorderRef.current = mediaRecorder
-      audioChunksRef.current = []
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data)
-        }
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      if (!SpeechRecognition) {
+        setIsSupported(false)
+        setError("Браузер не поддерживает распознавание речи. Используйте Chrome или Edge.")
       }
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" })
-        stream.getTracks().forEach(track => track.stop())
-        await processAudio(audioBlob)
-      }
-
-      mediaRecorder.start()
-      setIsRecording(true)
-    } catch {
-      setError("Микрофонға қол жеткізу мүмкін емес / Не удалось получить доступ к микрофону")
     }
+  }, [])
+
+  const startRecording = () => {
+    setError("")
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      setError("Браузер не поддерживает распознавание речи")
+      return
+    }
+
+    const recognition = new SpeechRecognition()
+    recognition.lang = "kk-KZ"
+    recognition.continuous = false
+    recognition.interimResults = false
+
+    recognition.onstart = () => {
+      setIsRecording(true)
+    }
+
+    recognition.onresult = async (event: SpeechRecognitionEvent) => {
+      const transcript = event.results[0][0].transcript
+      setIsRecording(false)
+      
+      if (transcript) {
+        setMessages(prev => [...prev, { role: "user", text: transcript }])
+        await processWithAI(transcript)
+      }
+    }
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error("Speech recognition error:", event.error)
+      setIsRecording(false)
+      if (event.error === 'no-speech') {
+        setError("Речь не обнаружена. Попробуйте ещё раз.")
+      } else if (event.error === 'not-allowed') {
+        setError("Доступ к микрофону запрещён.")
+      } else {
+        setError(`Ошибка: ${event.error}`)
+      }
+    }
+
+    recognition.onend = () => {
+      setIsRecording(false)
+    }
+
+    recognitionRef.current = recognition
+    recognition.start()
   }
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
+    if (recognitionRef.current) {
+      recognitionRef.current.stop()
     }
+    setIsRecording(false)
   }
 
-  const processAudio = async (audioBlob: Blob) => {
+  const processWithAI = async (text: string) => {
     setIsProcessing(true)
-
     try {
-      // 1. Speech to Text
-      const formData = new FormData()
-      formData.append("audio", audioBlob, "recording.webm")
-
-      const sttResponse = await fetch("/api/speech/stt", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!sttResponse.ok) {
-        throw new Error("Speech recognition failed")
-      }
-
-      const sttData = await sttResponse.json()
-      const recognizedText = sttData.text
-
-      if (!recognizedText) {
-        setError("Сөйлеу танылмады. Қайталап көріңіз. / Речь не распознана. Попробуйте снова.")
-        setIsProcessing(false)
-        return
-      }
-
-      setMessages(prev => [...prev, { role: "user", text: recognizedText }])
-
-      // 2. Get AI response
-      const chatResponse = await fetch("/api/chat", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: recognizedText }],
-        }),
+        body: JSON.stringify({ message: text }),
       })
 
-      if (!chatResponse.ok) {
-        throw new Error("Chat API failed")
-      }
-
-      const chatData = await chatResponse.json()
-      const aiResponse = chatData.message
-
+      if (!response.ok) throw new Error("AI error")
+      
+      const data = await response.json()
+      const aiResponse = data.response || data.message || "Кешіріңіз, жауап ала алмадым."
+      
       setMessages(prev => [...prev, { role: "ai", text: aiResponse }])
-
-      // 3. Text to Speech
-      await speakResponse(aiResponse)
-    } catch {
-      setError("Өңдеу қатесі. Қайталап көріңіз. / Ошибка обработки. Попробуйте снова.")
+      speakResponse(aiResponse)
+    } catch (err) {
+      console.error("AI error:", err)
+      setError("AI өңдеу қатесі")
     } finally {
       setIsProcessing(false)
     }
   }
 
-  const speakResponse = async (text: string) => {
-    try {
+  const speakResponse = (text: string) => {
+    if ('speechSynthesis' in window) {
       setIsSpeaking(true)
-
-      // Определяем язык по тексту
-      const isRussian = /[а-яё]/i.test(text) && !/[әғқңөұүһі]/i.test(text)
-      const lang = isRussian ? "ru-RU" : "kk-KZ"
-
-      const ttsResponse = await fetch("/api/speech/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, lang }),
-      })
-
-      if (!ttsResponse.ok) {
-        throw new Error("TTS failed")
-      }
-
-      const audioBlob = await ttsResponse.blob()
-      const audioUrl = URL.createObjectURL(audioBlob)
-
-      if (audioRef.current) {
-        audioRef.current.src = audioUrl
-        audioRef.current.play()
-        audioRef.current.onended = () => {
-          setIsSpeaking(false)
-          URL.revokeObjectURL(audioUrl)
-        }
-      }
-    } catch {
-      setIsSpeaking(false)
+      
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.lang = "kk-KZ"
+      utterance.rate = 0.9
+      
+      utterance.onend = () => setIsSpeaking(false)
+      utterance.onerror = () => setIsSpeaking(false)
+      
+      window.speechSynthesis.speak(utterance)
     }
   }
 
   const stopSpeaking = () => {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.currentTime = 0
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
       setIsSpeaking(false)
     }
+  }
+
+  if (!isSupported) {
+    return (
+      <div className="min-h-screen relative">
+        <DashboardBackground />
+        <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-8">
+          <div className="text-red-400 text-xl mb-4">⚠️ Браузер не поддерживает голосовой ввод</div>
+          <p className="text-gray-400">Используйте Google Chrome или Microsoft Edge</p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="min-h-screen relative">
       <DashboardBackground />
-      <audio ref={audioRef} className="hidden" />
       
       <div className="relative z-10 p-6 lg:p-10">
-        {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">🎤 Дауыстық көмекші / Голосовой ассистент</h1>
           <p className="text-muted-foreground">
@@ -162,15 +182,14 @@ export default function VoiceAssistantPage() {
         </div>
 
         <div className="grid lg:grid-cols-2 gap-6">
-          {/* Left - Voice Control */}
+          {/* Voice Control */}
           <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-8">
             <div className="flex flex-col items-center justify-center min-h-[400px]">
-              {/* Status */}
               <div className="text-center mb-8">
                 {isRecording && (
                   <div className="flex items-center gap-2 text-red-500 animate-pulse">
                     <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <span className="text-lg font-medium">Жазылуда... / Запись...</span>
+                    <span className="text-lg font-medium">Тыңдаймын... / Слушаю...</span>
                   </div>
                 )}
                 {isProcessing && (
@@ -203,7 +222,7 @@ export default function VoiceAssistantPage() {
               ) : isRecording ? (
                 <button
                   onClick={stopRecording}
-                  className="w-32 h-32 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white flex items-center justify-center shadow-2xl animate-pulse hover:shadow-red-500/50 transition-all duration-300"
+                  className="w-32 h-32 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white flex items-center justify-center shadow-2xl animate-pulse"
                 >
                   <MicOff className="w-12 h-12" />
                 </button>
@@ -211,7 +230,7 @@ export default function VoiceAssistantPage() {
                 <button
                   onClick={startRecording}
                   disabled={isProcessing}
-                  className="w-32 h-32 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-2xl hover:shadow-emerald-500/50 hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:hover:scale-100"
+                  className="w-32 h-32 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-2xl hover:shadow-emerald-500/50 hover:scale-105 transition-all duration-300 disabled:opacity-50"
                 >
                   {isProcessing ? (
                     <Loader2 className="w-12 h-12 animate-spin" />
@@ -221,23 +240,19 @@ export default function VoiceAssistantPage() {
                 </button>
               )}
 
-              {/* Error */}
               {error && (
                 <div className="mt-6 p-4 rounded-xl bg-red-500/10 text-red-500 text-center max-w-sm">
                   {error}
                 </div>
               )}
 
-              {/* Hint */}
               <p className="mt-8 text-sm text-muted-foreground text-center max-w-sm">
-                💡 Кеңес: Анық сөйлеңіз. Қазақша және орысша қолдайды.
-                <br />
-                Совет: Говорите чётко. Поддерживает казахский и русский.
+                💡 Используйте Chrome или Edge для лучшего распознавания
               </p>
             </div>
           </div>
 
-          {/* Right - Chat History */}
+          {/* Chat History */}
           <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-6">
             <div className="flex items-center gap-2 mb-4">
               <MessageSquare className="w-5 h-5 text-emerald-500" />
@@ -248,8 +263,7 @@ export default function VoiceAssistantPage() {
               {messages.length === 0 ? (
                 <div className="text-center text-muted-foreground py-12">
                   <Mic className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                  <p>Әзірше хабарлама жоқ</p>
-                  <p className="text-sm">Пока нет сообщений</p>
+                  <p>Әзірше хабарлама жоқ / Пока нет сообщений</p>
                 </div>
               ) : (
                 messages.map((msg, idx) => (
@@ -277,7 +291,7 @@ export default function VoiceAssistantPage() {
           <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-4 text-center">
             <div className="text-2xl mb-2">🇰🇿</div>
             <h3 className="font-medium">Қазақ тілі</h3>
-            <p className="text-sm text-muted-foreground">Толық қолдау</p>
+            <p className="text-sm text-muted-foreground">Web Speech API</p>
           </div>
           <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-4 text-center">
             <div className="text-2xl mb-2">🇷🇺</div>
@@ -287,11 +301,10 @@ export default function VoiceAssistantPage() {
           <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-4 text-center">
             <div className="text-2xl mb-2">🧠</div>
             <h3 className="font-medium">AI Assistant</h3>
-            <p className="text-sm text-muted-foreground">Powered by Yandex</p>
+            <p className="text-sm text-muted-foreground">Powered by Llama 3.1</p>
           </div>
         </div>
       </div>
     </div>
   )
 }
-
