@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { Pool } from "pg"
 import OpenAI from "openai"
+import { randomUUID } from "crypto"
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY || ""
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+})
 
 // Groq client for report generation
 const groq = new OpenAI({
@@ -122,20 +127,20 @@ export async function POST(req: NextRequest) {
       
       const reportText = reportMatch?.[1]?.trim() || aiResponse
       let structuredData = {
-        generalWellbeing: null,
-        sleepQuality: null,
-        sleepHours: null,
-        moodState: null,
-        stressLevel: null,
-        stressSources: [],
-        physicalSymptoms: [],
-        cognitiveIssues: [],
-        socialConnections: null,
+        generalWellbeing: null as number | null,
+        sleepQuality: null as string | null,
+        sleepHours: null as number | null,
+        moodState: null as string | null,
+        stressLevel: null as string | null,
+        stressSources: [] as string[],
+        physicalSymptoms: [] as string[],
+        cognitiveIssues: [] as string[],
+        socialConnections: null as string | null,
         riskLevel: "LOW",
         requiresFollowup: false,
         urgentAttention: false,
-        insights: [],
-        recommendations: []
+        insights: [] as string[],
+        recommendations: [] as string[]
       }
       
       if (jsonMatch?.[1]) {
@@ -154,36 +159,46 @@ export async function POST(req: NextRequest) {
         )
       }
       
-      // Create report in database
-      const report = await prisma.voiceReport.create({
-        data: {
-          vapiCallId: call.id,
-          callDuration,
-          title: `Денсаулық есебі / Отчёт здоровья - ${new Date().toLocaleDateString("kk-KZ")}`,
-          summary: reportText,
-          generalWellbeing: structuredData.generalWellbeing,
-          sleepQuality: structuredData.sleepQuality,
-          sleepHours: structuredData.sleepHours,
-          moodState: structuredData.moodState,
-          stressLevel: structuredData.stressLevel,
-          stressSources: structuredData.stressSources,
-          physicalSymptoms: structuredData.physicalSymptoms,
-          cognitiveIssues: structuredData.cognitiveIssues,
-          socialConnections: structuredData.socialConnections,
-          riskLevel: structuredData.riskLevel,
-          aiInsights: structuredData.insights,
-          recommendations: structuredData.recommendations,
-          requiresFollowup: structuredData.requiresFollowup,
-          urgentAttention: structuredData.urgentAttention,
-          language: "kk",
-        }
-      })
+      // Create report in database using raw SQL
+      const reportId = randomUUID()
+      await pool.query(`
+        INSERT INTO voice_reports (
+          id, vapi_call_id, call_duration, title, summary,
+          general_wellbeing, sleep_quality, sleep_hours, mood_state,
+          stress_level, stress_sources, physical_symptoms, cognitive_issues,
+          social_connections, risk_level, ai_insights, recommendations,
+          requires_followup, urgent_attention, language, created_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW()
+        )
+      `, [
+        reportId,
+        call.id,
+        callDuration,
+        `Денсаулық есебі / Отчёт здоровья - ${new Date().toLocaleDateString("kk-KZ")}`,
+        reportText,
+        structuredData.generalWellbeing,
+        structuredData.sleepQuality,
+        structuredData.sleepHours,
+        structuredData.moodState,
+        structuredData.stressLevel,
+        structuredData.stressSources,
+        structuredData.physicalSymptoms,
+        structuredData.cognitiveIssues,
+        structuredData.socialConnections,
+        structuredData.riskLevel,
+        structuredData.insights,
+        structuredData.recommendations,
+        structuredData.requiresFollowup,
+        structuredData.urgentAttention,
+        "kk"
+      ])
       
-      console.log("Report created:", report.id)
+      console.log("Report created:", reportId)
       
       return NextResponse.json({ 
         status: "success", 
-        reportId: report.id 
+        reportId 
       })
     }
     
@@ -200,4 +215,3 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   return NextResponse.json({ status: "ok", service: "AMAN AI VAPI Webhook" })
 }
-

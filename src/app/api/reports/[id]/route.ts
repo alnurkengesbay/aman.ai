@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { Pool } from "pg"
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+})
 
 // GET single report by ID
 export async function GET(
@@ -16,15 +20,16 @@ export async function GET(
     
     const { id } = await params
     
-    const report = await prisma.voiceReport.findUnique({
-      where: { id }
-    })
+    const result = await pool.query(
+      `SELECT * FROM voice_reports WHERE id = $1`,
+      [id]
+    )
     
-    if (!report) {
+    if (result.rows.length === 0) {
       return NextResponse.json({ error: "Report not found" }, { status: 404 })
     }
     
-    return NextResponse.json({ report })
+    return NextResponse.json({ report: result.rows[0] })
   } catch (error) {
     console.error("Error fetching report:", error)
     return NextResponse.json({ error: "Failed to fetch report" }, { status: 500 })
@@ -45,9 +50,7 @@ export async function DELETE(
     
     const { id } = await params
     
-    await prisma.voiceReport.delete({
-      where: { id }
-    })
+    await pool.query(`DELETE FROM voice_reports WHERE id = $1`, [id])
     
     return NextResponse.json({ status: "deleted" })
   } catch (error) {
@@ -55,4 +58,3 @@ export async function DELETE(
     return NextResponse.json({ error: "Failed to delete report" }, { status: 500 })
   }
 }
-

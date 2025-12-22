@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { Pool } from "pg"
+
+// Direct PostgreSQL connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+})
 
 // GET all voice reports
 export async function GET(req: NextRequest) {
@@ -11,29 +16,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     
-    const reports = await prisma.voiceReport.findMany({
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        vapiCallId: true,
-        callDuration: true,
-        title: true,
-        summary: true,
-        generalWellbeing: true,
-        sleepQuality: true,
-        moodState: true,
-        stressLevel: true,
-        riskLevel: true,
-        requiresFollowup: true,
-        urgentAttention: true,
-        createdAt: true,
-      }
-    })
+    const result = await pool.query(`
+      SELECT 
+        id,
+        vapi_call_id as "vapiCallId",
+        call_duration as "callDuration",
+        title,
+        summary,
+        general_wellbeing as "generalWellbeing",
+        sleep_quality as "sleepQuality",
+        mood_state as "moodState",
+        stress_level as "stressLevel",
+        risk_level as "riskLevel",
+        requires_followup as "requiresFollowup",
+        urgent_attention as "urgentAttention",
+        created_at as "createdAt"
+      FROM voice_reports
+      ORDER BY created_at DESC
+    `)
     
-    return NextResponse.json({ reports })
+    return NextResponse.json({ reports: result.rows })
   } catch (error) {
     console.error("Error fetching reports:", error)
     return NextResponse.json({ error: "Failed to fetch reports" }, { status: 500 })
   }
 }
-
