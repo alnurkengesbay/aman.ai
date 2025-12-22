@@ -1,191 +1,100 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { Mic, MicOff, Volume2, Loader2, MessageSquare, Square } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { Phone, PhoneOff, Volume2, Loader2, MessageSquare } from "lucide-react"
 import { DashboardBackground } from "@/components/dashboard-background"
+import Vapi from "@vapi-ai/web"
+
+const VAPI_PUBLIC_KEY = "77dcbf9a-c62f-4d95-966e-e943c5785890"
+const VAPI_ASSISTANT_ID = "e4be2d3f-64c4-4d4c-b368-aab247474824"
 
 export default function VoiceAssistantPage() {
-  const [isRecording, setIsRecording] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
+  const [isConnected, setIsConnected] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
   const [isSpeaking, setIsSpeaking] = useState(false)
   const [messages, setMessages] = useState<Array<{ role: "user" | "ai"; text: string }>>([])
   const [error, setError] = useState("")
+  const [volumeLevel, setVolumeLevel] = useState(0)
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const audioChunksRef = useRef<Blob[]>([])
+  const vapiRef = useRef<Vapi | null>(null)
 
-  const startRecording = async () => {
-    console.log("Starting recording...")
+  useEffect(() => {
+    // Initialize Vapi
+    const vapi = new Vapi(VAPI_PUBLIC_KEY)
+    vapiRef.current = vapi
+
+    // Event listeners
+    vapi.on("call-start", () => {
+      console.log("Call started")
+      setIsConnected(true)
+      setIsConnecting(false)
+    })
+
+    vapi.on("call-end", () => {
+      console.log("Call ended")
+      setIsConnected(false)
+      setIsSpeaking(false)
+    })
+
+    vapi.on("speech-start", () => {
+      console.log("AI speaking")
+      setIsSpeaking(true)
+    })
+
+    vapi.on("speech-end", () => {
+      console.log("AI stopped speaking")
+      setIsSpeaking(false)
+    })
+
+    vapi.on("message", (message) => {
+      console.log("Message:", message)
+      
+      if (message.type === "transcript" && message.transcriptType === "final") {
+        if (message.role === "user") {
+          setMessages(prev => [...prev, { role: "user", text: message.transcript }])
+        } else if (message.role === "assistant") {
+          setMessages(prev => [...prev, { role: "ai", text: message.transcript }])
+        }
+      }
+    })
+
+    vapi.on("volume-level", (level) => {
+      setVolumeLevel(level)
+    })
+
+    vapi.on("error", (error) => {
+      console.error("Vapi error:", error)
+      setError("Қате орын алды / Произошла ошибка")
+      setIsConnecting(false)
+    })
+
+    return () => {
+      vapi.stop()
+    }
+  }, [])
+
+  const startCall = async () => {
+    if (!vapiRef.current) return
+    
     setError("")
+    setIsConnecting(true)
+    setMessages([])
     
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          channelCount: 1,
-          sampleRate: 48000,
-        } 
-      })
-      console.log("Got media stream")
-      
-      // Try to use OGG Opus format for Yandex
-      let mimeType = "audio/webm;codecs=opus"
-      if (MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")) {
-        mimeType = "audio/ogg;codecs=opus"
-      }
-      console.log("Using MIME type:", mimeType)
-      
-      const mediaRecorder = new MediaRecorder(stream, { mimeType })
-      
-      mediaRecorderRef.current = mediaRecorder
-      audioChunksRef.current = []
-
-      mediaRecorder.ondataavailable = (event) => {
-        console.log("Data available:", event.data.size, "bytes")
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data)
-        }
-      }
-
-      mediaRecorder.onstop = async () => {
-        console.log("Recording stopped, processing audio...")
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType })
-        console.log("Audio blob size:", audioBlob.size)
-        stream.getTracks().forEach(track => track.stop())
-        await processAudio(audioBlob)
-      }
-
-      mediaRecorder.start()
-      setIsRecording(true)
-      console.log("Recording started")
+      await vapiRef.current.start(VAPI_ASSISTANT_ID)
     } catch (err) {
-      console.error("Error starting recording:", err)
-      setError("Микрофонға қол жеткізу мүмкін емес / Не удалось получить доступ к микрофону")
+      console.error("Failed to start call:", err)
+      setError("Қоңырауды бастау мүмкін болмады / Не удалось начать звонок")
+      setIsConnecting(false)
     }
   }
 
-  const stopRecording = () => {
-    console.log("Stopping recording...")
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop()
-      setIsRecording(false)
+  const endCall = () => {
+    if (vapiRef.current) {
+      vapiRef.current.stop()
     }
-  }
-
-  const processAudio = async (audioBlob: Blob) => {
-    setIsProcessing(true)
-    console.log("Processing audio, size:", audioBlob.size)
-
-    try {
-      // 1. Speech to Text via Yandex
-      const formData = new FormData()
-      formData.append("audio", audioBlob, "recording.ogg")
-
-      console.log("Sending to STT API...")
-      const sttResponse = await fetch("/api/speech/stt", {
-        method: "POST",
-        body: formData,
-      })
-
-      console.log("STT response status:", sttResponse.status)
-      
-      if (!sttResponse.ok) {
-        const errText = await sttResponse.text()
-        console.error("STT error:", errText)
-        throw new Error("Speech recognition failed")
-      }
-
-      const sttData = await sttResponse.json()
-      console.log("STT result:", sttData)
-      const recognizedText = sttData.text
-
-      if (!recognizedText) {
-        setError("Сөйлеу танылмады. Қайталап көріңіз. / Речь не распознана.")
-        setIsProcessing(false)
-        return
-      }
-
-      setMessages(prev => [...prev, { role: "user", text: recognizedText }])
-
-      // 2. Get AI response
-      console.log("Sending to AI...")
-      const chatResponse = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          messages: [{ role: "user", content: recognizedText }] 
-        }),
-      })
-
-      if (!chatResponse.ok) {
-        throw new Error("Chat API failed")
-      }
-
-      const chatData = await chatResponse.json()
-      const aiResponse = chatData.message || chatData.response || "Кешіріңіз, жауап ала алмадым."
-      console.log("AI response:", aiResponse)
-
-      setMessages(prev => [...prev, { role: "ai", text: aiResponse }])
-
-      // 3. Text to Speech (browser-based for now)
-      speakResponse(aiResponse)
-    } catch (err) {
-      console.error("Processing error:", err)
-      setError("Өңдеу қатесі. Қайталап көріңіз. / Ошибка обработки.")
-    } finally {
-      setIsProcessing(false)
-    }
-  }
-
-  const speakResponse = async (text: string) => {
-    setIsSpeaking(true)
-    
-    try {
-      // Try Yandex TTS first
-      const response = await fetch("/api/speech/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, lang: "ru-RU" }),
-      })
-      
-      if (response.ok) {
-        const audioBlob = await response.blob()
-        const audioUrl = URL.createObjectURL(audioBlob)
-        const audio = new Audio(audioUrl)
-        audio.onended = () => {
-          setIsSpeaking(false)
-          URL.revokeObjectURL(audioUrl)
-        }
-        audio.onerror = () => {
-          setIsSpeaking(false)
-          URL.revokeObjectURL(audioUrl)
-        }
-        await audio.play()
-        return
-      }
-      
-      console.log("Yandex TTS failed, falling back to browser TTS")
-    } catch (err) {
-      console.error("TTS error:", err)
-    }
-    
-    // Fallback to browser TTS
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang = "ru-RU"
-      utterance.rate = 0.9
-      utterance.onend = () => setIsSpeaking(false)
-      utterance.onerror = () => setIsSpeaking(false)
-      window.speechSynthesis.speak(utterance)
-    } else {
-      setIsSpeaking(false)
-    }
-  }
-
-  const stopSpeaking = () => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel()
-      setIsSpeaking(false)
-    }
+    setIsConnected(false)
+    setIsSpeaking(false)
   }
 
   return (
@@ -196,7 +105,7 @@ export default function VoiceAssistantPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">🎤 Дауыстық көмекші / Голосовой ассистент</h1>
           <p className="text-muted-foreground">
-            Қазақша немесе орысша сөйлеңіз — AI жауап береді (Yandex SpeechKit)
+            AI-мен қазақша немесе орысша сөйлесіңіз — VAPI технологиясы
           </p>
         </div>
 
@@ -205,56 +114,59 @@ export default function VoiceAssistantPage() {
           <div className="bg-background/60 backdrop-blur-sm rounded-2xl border p-8">
             <div className="flex flex-col items-center justify-center min-h-[400px]">
               <div className="text-center mb-8">
-                {isRecording && (
-                  <div className="flex items-center gap-2 text-red-500 animate-pulse">
-                    <div className="w-3 h-3 rounded-full bg-red-500" />
-                    <span className="text-lg font-medium">Жазылуда... / Запись...</span>
-                  </div>
-                )}
-                {isProcessing && (
+                {isConnecting && (
                   <div className="flex items-center gap-2 text-blue-500">
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    <span className="text-lg font-medium">Өңделуде... / Обработка...</span>
+                    <span className="text-lg font-medium">Қосылуда... / Подключение...</span>
+                  </div>
+                )}
+                {isConnected && !isSpeaking && (
+                  <div className="flex items-center gap-2 text-emerald-500">
+                    <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-lg font-medium">Тыңдаймын... / Слушаю...</span>
                   </div>
                 )}
                 {isSpeaking && (
-                  <div className="flex items-center gap-2 text-emerald-500">
+                  <div className="flex items-center gap-2 text-amber-500">
                     <Volume2 className="w-5 h-5 animate-pulse" />
                     <span className="text-lg font-medium">AI сөйлеуде... / AI говорит...</span>
                   </div>
                 )}
-                {!isRecording && !isProcessing && !isSpeaking && (
+                {!isConnected && !isConnecting && (
                   <span className="text-lg text-muted-foreground">
-                    Микрофонды басыңыз / Нажмите на микрофон
+                    Қоңырау бастау үшін басыңыз / Нажмите для начала
                   </span>
                 )}
               </div>
 
+              {/* Volume indicator */}
+              {isConnected && (
+                <div className="w-32 h-2 bg-gray-700 rounded-full mb-6 overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all duration-100"
+                    style={{ width: `${Math.min(volumeLevel * 100, 100)}%` }}
+                  />
+                </div>
+              )}
+
               {/* Main Button */}
-              {isSpeaking ? (
+              {isConnected ? (
                 <button
-                  onClick={stopSpeaking}
-                  className="w-32 h-32 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-2xl hover:shadow-amber-500/50 transition-all duration-300 relative z-50 cursor-pointer"
+                  onClick={endCall}
+                  className="w-32 h-32 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white flex items-center justify-center shadow-2xl hover:shadow-red-500/50 transition-all duration-300 relative z-50 cursor-pointer"
                 >
-                  <Volume2 className="w-12 h-12 animate-pulse" />
-                </button>
-              ) : isRecording ? (
-                <button
-                  onClick={stopRecording}
-                  className="w-32 h-32 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white flex items-center justify-center shadow-2xl animate-pulse relative z-50 cursor-pointer"
-                >
-                  <Square className="w-10 h-10" />
+                  <PhoneOff className="w-12 h-12" />
                 </button>
               ) : (
                 <button
-                  onClick={startRecording}
-                  disabled={isProcessing}
+                  onClick={startCall}
+                  disabled={isConnecting}
                   className="w-32 h-32 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white flex items-center justify-center shadow-2xl hover:shadow-emerald-500/50 hover:scale-105 transition-all duration-300 disabled:opacity-50 relative z-50 cursor-pointer"
                 >
-                  {isProcessing ? (
+                  {isConnecting ? (
                     <Loader2 className="w-12 h-12 animate-spin" />
                   ) : (
-                    <Mic className="w-12 h-12" />
+                    <Phone className="w-12 h-12" />
                   )}
                 </button>
               )}
@@ -266,7 +178,7 @@ export default function VoiceAssistantPage() {
               )}
 
               <p className="mt-8 text-sm text-muted-foreground text-center max-w-sm">
-                💡 Нажмите для записи, говорите, нажмите снова для остановки
+                💡 Нажмите для начала разговора. AI будет слушать и отвечать голосом.
               </p>
             </div>
           </div>
@@ -281,7 +193,7 @@ export default function VoiceAssistantPage() {
             <div className="space-y-4 max-h-[500px] overflow-y-auto">
               {messages.length === 0 ? (
                 <div className="text-center text-muted-foreground py-12">
-                  <Mic className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                  <Phone className="w-12 h-12 mx-auto mb-4 opacity-20" />
                   <p>Әзірше хабарлама жоқ / Пока нет сообщений</p>
                 </div>
               ) : (
@@ -310,7 +222,7 @@ export default function VoiceAssistantPage() {
           <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-4 text-center">
             <div className="text-2xl mb-2">🇰🇿</div>
             <h3 className="font-medium">Қазақ тілі</h3>
-            <p className="text-sm text-muted-foreground">Yandex SpeechKit</p>
+            <p className="text-sm text-muted-foreground">VAPI + Azure</p>
           </div>
           <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-4 text-center">
             <div className="text-2xl mb-2">🇷🇺</div>
@@ -318,9 +230,9 @@ export default function VoiceAssistantPage() {
             <p className="text-sm text-muted-foreground">Полная поддержка</p>
           </div>
           <div className="bg-background/60 backdrop-blur-sm rounded-xl border p-4 text-center">
-            <div className="text-2xl mb-2">🧠</div>
-            <h3 className="font-medium">AI Assistant</h3>
-            <p className="text-sm text-muted-foreground">Llama 3.1 + Groq</p>
+            <div className="text-2xl mb-2">🎙️</div>
+            <h3 className="font-medium">Real-time</h3>
+            <p className="text-sm text-muted-foreground">Живой разговор</p>
           </div>
         </div>
       </div>
