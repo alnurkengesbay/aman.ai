@@ -57,51 +57,66 @@ export default function VoiceAssistantPage() {
   }, [])
 
   const startRecording = () => {
+    console.log("startRecording called")
     setError("")
     
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    console.log("SpeechRecognition available:", !!SpeechRecognition)
+    
     if (!SpeechRecognition) {
       setError("Браузер не поддерживает распознавание речи")
       return
     }
 
-    const recognition = new SpeechRecognition()
-    recognition.lang = "kk-KZ"
-    recognition.continuous = false
-    recognition.interimResults = false
-
-    recognition.onstart = () => {
-      setIsRecording(true)
-    }
-
-    recognition.onresult = async (event: SpeechRecognitionEvent) => {
-      const transcript = event.results[0][0].transcript
-      setIsRecording(false)
+    try {
+      const recognition = new SpeechRecognition()
+      console.log("Recognition created")
       
-      if (transcript) {
-        setMessages(prev => [...prev, { role: "user", text: transcript }])
-        await processWithAI(transcript)
+      recognition.lang = "kk-KZ"
+      recognition.continuous = false
+      recognition.interimResults = false
+
+      recognition.onstart = () => {
+        console.log("Recognition started")
+        setIsRecording(true)
       }
-    }
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error("Speech recognition error:", event.error)
-      setIsRecording(false)
-      if (event.error === 'no-speech') {
-        setError("Речь не обнаружена. Попробуйте ещё раз.")
-      } else if (event.error === 'not-allowed') {
-        setError("Доступ к микрофону запрещён.")
-      } else {
-        setError(`Ошибка: ${event.error}`)
+      recognition.onresult = async (event: SpeechRecognitionEvent) => {
+        console.log("Recognition result:", event.results[0][0].transcript)
+        const transcript = event.results[0][0].transcript
+        setIsRecording(false)
+        
+        if (transcript) {
+          setMessages(prev => [...prev, { role: "user", text: transcript }])
+          await processWithAI(transcript)
+        }
       }
-    }
 
-    recognition.onend = () => {
-      setIsRecording(false)
-    }
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error("Speech recognition error:", event.error)
+        setIsRecording(false)
+        if (event.error === 'no-speech') {
+          setError("Речь не обнаружена. Попробуйте ещё раз.")
+        } else if (event.error === 'not-allowed') {
+          setError("Доступ к микрофону запрещён.")
+        } else {
+          setError(`Ошибка: ${event.error}`)
+        }
+      }
 
-    recognitionRef.current = recognition
-    recognition.start()
+      recognition.onend = () => {
+        console.log("Recognition ended")
+        setIsRecording(false)
+      }
+
+      recognitionRef.current = recognition
+      console.log("Calling recognition.start()")
+      recognition.start()
+      console.log("recognition.start() called")
+    } catch (err) {
+      console.error("Error in startRecording:", err)
+      setError("Ошибка запуска распознавания")
+    }
   }
 
   const stopRecording = () => {
