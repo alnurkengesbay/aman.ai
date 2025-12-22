@@ -3,11 +3,35 @@
 import { useState, useRef, useEffect } from "react"
 import { Mic, MicOff, Volume2, Loader2, MessageSquare } from "lucide-react"
 
-// Extend Window interface for Web Speech API
+// Web Speech API types
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
+}
+
+interface SpeechRecognitionInstance extends EventTarget {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  start: () => void
+  stop: () => void
+  onstart: (() => void) | null
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognitionInstance
+}
+
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition
-    webkitSpeechRecognition: typeof SpeechRecognition
+    SpeechRecognition: SpeechRecognitionConstructor
+    webkitSpeechRecognition: SpeechRecognitionConstructor
   }
 }
 
@@ -19,7 +43,7 @@ export default function VoiceAssistantPage() {
   const [error, setError] = useState("")
   const [isSupported, setIsSupported] = useState(true)
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
