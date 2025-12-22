@@ -138,27 +138,40 @@ ${report.summary}
   }
 
   // Parse summary into sections
-  const parseSummary = (summary: string) => {
-    const sections: { title: string; content: string; icon: React.ReactNode }[] = []
+  const parseSummary = (summary: string): { title: string; content: string; iconType: string }[] | null => {
+    const sections: { title: string; content: string; iconType: string }[] = []
     
     const patterns = [
-      { regex: /ЖАЛПЫ ЖАҒДАЙ.*?ОБЩЕЕ СОСТОЯНИЕ[:\s]*(.*?)(?=ҰЙҚЫ|СОН|$)/is, title: "Жалпы жағдай", icon: <Heart className="w-4 h-4 text-rose-500" /> },
-      { regex: /ҰЙҚЫ.*?СОН[:\s]*(.*?)(?=КӨҢІЛ|НАСТРОЕНИЕ|$)/is, title: "Ұйқы", icon: <Moon className="w-4 h-4 text-indigo-500" /> },
-      { regex: /КӨҢІЛ-КҮЙ.*?НАСТРОЕНИЕ[:\s]*(.*?)(?=СТРЕСС|$)/is, title: "Көңіл-күй", icon: <Brain className="w-4 h-4 text-purple-500" /> },
-      { regex: /СТРЕСС ДЕҢГЕЙІ.*?УРОВЕНЬ СТРЕССА[:\s]*(.*?)(?=ФИЗИКАЛЫҚ|ФИЗИЧЕСКИЕ|$)/is, title: "Стресс деңгейі", icon: <Activity className="w-4 h-4 text-amber-500" /> },
-      { regex: /ФИЗИКАЛЫҚ.*?ФИЗИЧЕСКИЕ СИМПТОМЫ[:\s]*(.*?)(?=КОГНИТИВТІ|КОГНИТИВНЫЕ|$)/is, title: "Физикалық симптомдар", icon: <Stethoscope className="w-4 h-4 text-blue-500" /> },
-      { regex: /ҚОРЫТЫНДЫ.*?ЗАКЛЮЧЕНИЕ[:\s]*(.*?)(?=ҰСЫНЫСТАР|РЕКОМЕНДАЦИИ|$)/is, title: "Қорытынды", icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" /> },
-      { regex: /ҰСЫНЫСТАР.*?РЕКОМЕНДАЦИИ[:\s]*(.*?)$/is, title: "Ұсыныстар", icon: <FileText className="w-4 h-4 text-teal-500" /> },
+      { regex: /ЖАЛПЫ ЖАҒДАЙ.*?ОБЩЕЕ СОСТОЯНИЕ[:\s]*(.*?)(?=ҰЙҚЫ|СОН|$)/is, title: "Жалпы жағдай", iconType: "heart" },
+      { regex: /ҰЙҚЫ.*?СОН[:\s]*(.*?)(?=КӨҢІЛ|НАСТРОЕНИЕ|$)/is, title: "Ұйқы", iconType: "moon" },
+      { regex: /КӨҢІЛ-КҮЙ.*?НАСТРОЕНИЕ[:\s]*(.*?)(?=СТРЕСС|$)/is, title: "Көңіл-күй", iconType: "brain" },
+      { regex: /СТРЕСС ДЕҢГЕЙІ.*?УРОВЕНЬ СТРЕССА[:\s]*(.*?)(?=ФИЗИКАЛЫҚ|ФИЗИЧЕСКИЕ|$)/is, title: "Стресс деңгейі", iconType: "activity" },
+      { regex: /ФИЗИКАЛЫҚ.*?ФИЗИЧЕСКИЕ СИМПТОМЫ[:\s]*(.*?)(?=КОГНИТИВТІ|КОГНИТИВНЫЕ|$)/is, title: "Физикалық симптомдар", iconType: "stethoscope" },
+      { regex: /ҚОРЫТЫНДЫ.*?ЗАКЛЮЧЕНИЕ[:\s]*(.*?)(?=ҰСЫНЫСТАР|РЕКОМЕНДАЦИИ|$)/is, title: "Қорытынды", iconType: "check" },
+      { regex: /ҰСЫНЫСТАР.*?РЕКОМЕНДАЦИИ[:\s]*(.*?)$/is, title: "Ұсыныстар", iconType: "file" },
     ]
     
-    for (const { regex, title, icon } of patterns) {
+    for (const { regex, title, iconType } of patterns) {
       const match = summary.match(regex)
       if (match && match[1]?.trim()) {
-        sections.push({ title, content: match[1].trim(), icon })
+        sections.push({ title, content: match[1].trim(), iconType })
       }
     }
     
     return sections.length > 0 ? sections : null
+  }
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case "heart": return <Heart className="w-4 h-4 text-rose-500" />
+      case "moon": return <Moon className="w-4 h-4 text-indigo-500" />
+      case "brain": return <Brain className="w-4 h-4 text-purple-500" />
+      case "activity": return <Activity className="w-4 h-4 text-amber-500" />
+      case "stethoscope": return <Stethoscope className="w-4 h-4 text-blue-500" />
+      case "check": return <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+      case "file": return <FileText className="w-4 h-4 text-teal-500" />
+      default: return <FileText className="w-4 h-4 text-gray-500" />
+    }
   }
 
   return (
@@ -322,7 +335,7 @@ ${report.summary}
                         {parseSummary(selectedReport.summary)?.map((section, idx) => (
                           <div key={idx} className="p-4 rounded-xl bg-muted/20 border border-muted/30">
                             <div className="flex items-center gap-2 mb-2">
-                              {section.icon}
+                              {getIcon(section.iconType)}
                               <h4 className="font-semibold text-sm">{section.title}</h4>
                             </div>
                             <p className="text-sm text-muted-foreground leading-relaxed">
