@@ -87,8 +87,21 @@ export default function VoiceAssistantPage() {
       
       // Try Russian first (better support), fallback to auto-detect
       recognition.lang = "ru-RU"
-      recognition.continuous = false
-      recognition.interimResults = false
+      recognition.continuous = true
+      recognition.interimResults = true
+
+      // @ts-expect-error - these events exist but not in types
+      recognition.onaudiostart = () => console.log("Audio capture started")
+      // @ts-expect-error
+      recognition.onaudioend = () => console.log("Audio capture ended")
+      // @ts-expect-error
+      recognition.onsoundstart = () => console.log("Sound detected")
+      // @ts-expect-error
+      recognition.onsoundend = () => console.log("Sound ended")
+      // @ts-expect-error  
+      recognition.onspeechstart = () => console.log("Speech detected")
+      // @ts-expect-error
+      recognition.onspeechend = () => console.log("Speech ended")
 
       recognition.onstart = () => {
         console.log("Recognition started")
