@@ -1,55 +1,137 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DashboardBackground } from "@/components/dashboard-background"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { 
   FileText, 
-  Plus,
   Search,
   Calendar,
-  User,
-  ChevronRight,
+  Clock,
   Download,
-  Share2,
-  MoreVertical,
-  Edit,
-  Trash2,
+  ChevronRight,
+  Loader2,
+  Heart,
+  Moon,
+  Brain,
+  Activity,
+  AlertTriangle,
+  Mic,
 } from "lucide-react"
 
-// Mock reports
-const reports = [
-  {
-    id: "1",
-    title: "Заключение по МРТ",
-    patient: "Алексей Ким",
-    date: "Сегодня",
-    status: "draft",
-  },
-  {
-    id: "2",
-    title: "Итоговый отчёт за квартал",
-    patient: "Мария Сергеева",
-    date: "Вчера",
-    status: "sent",
-  },
-  {
-    id: "3",
-    title: "Рекомендации по лечению",
-    patient: "Дмитрий Павлов",
-    date: "3 дня назад",
-    status: "sent",
-  },
-]
+interface VoiceReport {
+  id: string
+  vapiCallId: string
+  callDuration: number | null
+  title: string
+  summary: string
+  generalWellbeing: number | null
+  sleepQuality: string | null
+  moodState: string | null
+  stressLevel: string | null
+  riskLevel: string | null
+  requiresFollowup: boolean
+  urgentAttention: boolean
+  createdAt: string
+}
 
 export default function DoctorReportsPage() {
-  const [showNewReport, setShowNewReport] = useState(false)
+  const [reports, setReports] = useState<VoiceReport[]>([])
+  const [selectedReport, setSelectedReport] = useState<VoiceReport | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState("")
+
+  useEffect(() => {
+    fetchReports()
+  }, [])
+
+  const fetchReports = async () => {
+    try {
+      const res = await fetch("/api/reports")
+      const data = await res.json()
+      if (data.reports) {
+        setReports(data.reports)
+        if (data.reports.length > 0) {
+          setSelectedReport(data.reports[0])
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch reports:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const downloadReport = (report: VoiceReport) => {
+    const date = new Date(report.createdAt).toLocaleString("kk-KZ")
+    
+    const content = `
+═══════════════════════════════════════════════════════════
+                        AMAN AI
+              Денсаулық бағалау есебі
+═══════════════════════════════════════════════════════════
+
+Күні: ${date}
+Ұзақтығы: ${report.callDuration ? Math.round(report.callDuration / 60) + " мин" : "—"}
+Қауіп деңгейі: ${report.riskLevel || "LOW"}
+
+───────────────────────────────────────────────────────────
+                    КӨРСЕТКІШТЕР
+───────────────────────────────────────────────────────────
+
+Жалпы жағдай: ${report.generalWellbeing || "—"}/10
+Ұйқы сапасы: ${report.sleepQuality || "—"}
+Көңіл-күй: ${report.moodState || "—"}
+Стресс деңгейі: ${report.stressLevel || "—"}
+
+───────────────────────────────────────────────────────────
+                      ЕСЕП
+───────────────────────────────────────────────────────────
+
+${report.summary}
+
+═══════════════════════════════════════════════════════════
+                  AMAN AI Platform
+═══════════════════════════════════════════════════════════
+`
+    
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `Report_${new Date(report.createdAt).toISOString().split("T")[0]}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const getRiskColor = (level: string | null) => {
+    switch (level) {
+      case "CRITICAL": return "bg-red-500/10 text-red-500 border-red-500/30"
+      case "HIGH": return "bg-orange-500/10 text-orange-500 border-orange-500/30"
+      case "MODERATE": return "bg-yellow-500/10 text-yellow-500 border-yellow-500/30"
+      default: return "bg-emerald-500/10 text-emerald-500 border-emerald-500/30"
+    }
+  }
+
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return "—"
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, "0")}`
+  }
+
+  const filteredReports = reports.filter(r => 
+    r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.summary.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
   return (
     <>
-      <DashboardHeader title="Отчёты" />
+      <DashboardHeader title="Пациент есептері" />
       <div className="flex-1 overflow-auto relative pb-20 lg:pb-0">
         <DashboardBackground />
         
@@ -57,120 +139,189 @@ export default function DoctorReportsPage() {
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
             <div>
-              <h2 className="text-2xl font-medium tracking-tight mb-1">Мои отчёты</h2>
-              <p className="text-muted-foreground text-sm">{reports.length} отчётов создано</p>
+              <h2 className="text-2xl font-medium tracking-tight mb-1">AI Голосовые есептер</h2>
+              <p className="text-muted-foreground text-sm">
+                {reports.length} есеп • Дауыстық көмекшімен сөйлесуден жасалған
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input placeholder="Поиск..." className="pl-10 w-[200px]" />
-              </div>
-              <Button size="sm" className="gap-2" onClick={() => setShowNewReport(true)}>
-                <Plus className="w-4 h-4" />
-                Новый отчёт
-              </Button>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input 
+                placeholder="Іздеу..." 
+                className="pl-10 w-[200px]" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
           </div>
 
-          {/* New Report Form */}
-          {showNewReport && (
-            <div className="border border-border rounded-2xl p-6 bg-background/60 backdrop-blur-sm mb-8 animate-fade-up">
-              <h3 className="font-medium mb-6">Создание нового отчёта</h3>
-              <div className="grid md:grid-cols-2 gap-6 mb-6">
-                <div>
-                  <label className="text-sm text-muted-foreground mb-2 block">Название отчёта</label>
-                  <Input placeholder="Например: Заключение по МРТ" />
-                </div>
-                <div>
-                  <label className="text-sm text-muted-foreground mb-2 block">Пациент</label>
-                  <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
-                    <option>Выберите пациента</option>
-                    <option>Алексей Ким</option>
-                    <option>Мария Сергеева</option>
-                    <option>Дмитрий Павлов</option>
-                  </select>
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+            </div>
+          ) : reports.length === 0 ? (
+            <div className="text-center py-20 border rounded-2xl bg-background/60">
+              <Mic className="w-16 h-16 mx-auto mb-4 opacity-20" />
+              <p className="text-xl text-muted-foreground">Әзірше есептер жоқ</p>
+              <p className="text-sm text-muted-foreground mt-2">
+                Пациенттер дауыстық көмекшімен сөйлескенде есептер пайда болады
+              </p>
+            </div>
+          ) : (
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Reports List */}
+              <div className="lg:col-span-1">
+                <div className="border rounded-2xl bg-background/60 backdrop-blur-sm overflow-hidden">
+                  <div className="p-4 border-b">
+                    <span className="text-sm font-medium">{filteredReports.length} есеп</span>
+                  </div>
+                  
+                  <div className="max-h-[600px] overflow-y-auto">
+                    {filteredReports.map((report) => (
+                      <div
+                        key={report.id}
+                        onClick={() => setSelectedReport(report)}
+                        className={`p-4 border-b cursor-pointer transition-colors ${
+                          selectedReport?.id === report.id
+                            ? "bg-emerald-500/10"
+                            : "hover:bg-muted/50"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              {report.urgentAttention && (
+                                <AlertTriangle className="w-4 h-4 text-red-500" />
+                              )}
+                              <span className={`text-xs px-2 py-0.5 rounded-full border ${getRiskColor(report.riskLevel)}`}>
+                                {report.riskLevel || "LOW"}
+                              </span>
+                            </div>
+                            <p className="text-sm font-medium">
+                              {new Date(report.createdAt).toLocaleDateString("kk-KZ", {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric"
+                              })}
+                            </p>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {formatDuration(report.callDuration)}
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div className="mb-6">
-                <label className="text-sm text-muted-foreground mb-2 block">Содержание</label>
-                <textarea 
-                  className="w-full min-h-[200px] px-3 py-2 rounded-md border border-input bg-background text-sm resize-none"
-                  placeholder="Введите текст отчёта..."
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <Button>Сохранить черновик</Button>
-                <Button variant="outline">Отправить пациенту</Button>
-                <Button variant="ghost" onClick={() => setShowNewReport(false)}>Отмена</Button>
+
+              {/* Report Detail */}
+              <div className="lg:col-span-2">
+                {selectedReport ? (
+                  <div className="border rounded-2xl bg-background/60 backdrop-blur-sm overflow-hidden">
+                    {/* Header */}
+                    <div className="p-6 border-b bg-gradient-to-r from-emerald-500/5 to-teal-500/5">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getRiskColor(selectedReport.riskLevel)}`}>
+                              {selectedReport.riskLevel === "LOW" ? "Қалыпты" : 
+                               selectedReport.riskLevel === "MODERATE" ? "Орташа" :
+                               selectedReport.riskLevel === "HIGH" ? "Жоғары" : "Төмен"}
+                            </span>
+                            {selectedReport.urgentAttention && (
+                              <span className="flex items-center gap-1 text-xs text-red-500">
+                                <AlertTriangle className="w-3 h-3" />
+                                Шұғыл
+                              </span>
+                            )}
+                            {selectedReport.requiresFollowup && (
+                              <span className="text-xs text-amber-500">
+                                Бақылау қажет
+                              </span>
+                            )}
+                          </div>
+                          <h2 className="text-xl font-bold">
+                            {new Date(selectedReport.createdAt).toLocaleDateString("kk-KZ", {
+                              weekday: "long",
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric"
+                            })}
+                          </h2>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Сөйлесу ұзақтығы: {formatDuration(selectedReport.callDuration)}
+                          </p>
+                        </div>
+                        
+                        <Button onClick={() => downloadReport(selectedReport)} className="gap-2">
+                          <Download className="w-4 h-4" />
+                          Жүктеу
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Quick Stats */}
+                    <div className="grid grid-cols-4 border-b">
+                      <div className="p-4 text-center border-r">
+                        <Heart className="w-5 h-5 text-rose-500 mx-auto mb-1" />
+                        <p className="text-lg font-bold">{selectedReport.generalWellbeing || "—"}</p>
+                        <p className="text-xs text-muted-foreground">Жағдай</p>
+                      </div>
+                      <div className="p-4 text-center border-r">
+                        <Moon className="w-5 h-5 text-indigo-500 mx-auto mb-1" />
+                        <p className="text-lg font-bold">{selectedReport.sleepQuality || "—"}</p>
+                        <p className="text-xs text-muted-foreground">Ұйқы</p>
+                      </div>
+                      <div className="p-4 text-center border-r">
+                        <Brain className="w-5 h-5 text-purple-500 mx-auto mb-1" />
+                        <p className="text-lg font-bold">{selectedReport.moodState || "—"}</p>
+                        <p className="text-xs text-muted-foreground">Көңіл-күй</p>
+                      </div>
+                      <div className="p-4 text-center">
+                        <Activity className="w-5 h-5 text-amber-500 mx-auto mb-1" />
+                        <p className="text-lg font-bold">{selectedReport.stressLevel || "—"}</p>
+                        <p className="text-xs text-muted-foreground">Стресс</p>
+                      </div>
+                    </div>
+
+                    {/* Report Content */}
+                    <div className="p-6">
+                      <h3 className="font-semibold mb-3 flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-emerald-500" />
+                        Толық есеп
+                      </h3>
+                      <div className="p-4 rounded-xl bg-muted/20 border">
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                          {selectedReport.summary}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-6 py-4 border-t bg-muted/10">
+                      <p className="text-xs text-muted-foreground text-center">
+                        AI арқылы жасалған есеп • AMAN AI Platform
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border rounded-2xl bg-background/60 p-12 text-center">
+                    <FileText className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                    <p className="text-lg text-muted-foreground">
+                      Есепті таңдаңыз
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
-
-          {/* Reports List */}
-          <div className="border border-border rounded-2xl bg-background/60 backdrop-blur-sm overflow-hidden">
-            <div className="grid grid-cols-[1fr,auto,auto,auto] gap-4 p-4 border-b border-border text-xs text-muted-foreground font-medium">
-              <span>Отчёт</span>
-              <span>Дата</span>
-              <span>Статус</span>
-              <span></span>
-            </div>
-
-            {reports.map((report, index) => (
-              <div
-                key={report.id}
-                className="grid grid-cols-[1fr,auto,auto,auto] gap-4 p-4 border-b border-border last:border-0 hover:bg-secondary/30 transition-colors items-center opacity-0 animate-fade-up"
-                style={{ animationDelay: `${index * 100}ms`, animationFillMode: "forwards" }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-sm">{report.title}</p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
-                      <User className="w-3 h-3" />
-                      {report.patient}
-                    </p>
-                  </div>
-                </div>
-                <span className="text-sm text-muted-foreground">{report.date}</span>
-                <StatusBadge status={report.status} />
-                <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Download className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <Share2 className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </>
   )
 }
-
-function StatusBadge({ status }: { status: string }) {
-  const styles = {
-    draft: "bg-yellow-500/10 text-yellow-600",
-    sent: "bg-green-500/10 text-green-600",
-  }
-
-  const labels = {
-    draft: "Черновик",
-    sent: "Отправлен",
-  }
-
-  return (
-    <span className={`px-2 py-1 text-xs rounded-full ${styles[status as keyof typeof styles]}`}>
-      {labels[status as keyof typeof labels]}
-    </span>
-  )
-}
-
-
