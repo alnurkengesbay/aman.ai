@@ -58,6 +58,140 @@ function parseDialogue(rawDialogue: string): DialogueLine[] {
   })
 }
 
+interface SummarySection {
+  type: "general" | "sleep" | "mood" | "stress" | "symptoms" | "conclusion" | "recommendations" | "other"
+  title: string
+  content: string
+}
+
+function parseSummary(summary: string): SummarySection[] {
+  if (!summary) return []
+  
+  const sections: SummarySection[] = []
+  
+  // Common section patterns in reports
+  const sectionPatterns = [
+    { pattern: /(?:жалпы жағдай|общее состояние|general condition)[:\s]*/gi, type: "general" as const, title: "Жалпы жағдай / Общее состояние" },
+    { pattern: /(?:ұйқы|сон|sleep)[:\s]*/gi, type: "sleep" as const, title: "Ұйқы / Сон" },
+    { pattern: /(?:көңіл-күй|настроение|mood)[:\s]*/gi, type: "mood" as const, title: "Көңіл-күй / Настроение" },
+    { pattern: /(?:стресс|stress)[:\s]*/gi, type: "stress" as const, title: "Стресс / Уровень стресса" },
+    { pattern: /(?:симптом|symptom|белгі)[:\s]*/gi, type: "symptoms" as const, title: "Симптомдар / Симптомы" },
+    { pattern: /(?:қорытынды|заключение|conclusion|резюме|summary)[:\s]*/gi, type: "conclusion" as const, title: "Қорытынды / Заключение" },
+    { pattern: /(?:ұсыныс|рекоменд|recommendation)[:\s]*/gi, type: "recommendations" as const, title: "Ұсыныстар / Рекомендации" },
+  ]
+  
+  // Try to split by numbered sections (1. 2. 3. etc) or bullet points
+  const numberedPattern = /(?:^|\n)(?:\d+[\.\)]\s*|[-•]\s*)/g
+  const hasBullets = numberedPattern.test(summary)
+  
+  if (hasBullets) {
+    // Split by numbered items or bullets
+    const items = summary.split(/(?:^|\n)(?:\d+[\.\)]\s*|[-•]\s*)/).filter(item => item.trim())
+    
+    items.forEach(item => {
+      const trimmedItem = item.trim()
+      let matched = false
+      
+      for (const { pattern, type, title } of sectionPatterns) {
+        if (pattern.test(trimmedItem)) {
+          const content = trimmedItem.replace(pattern, "").trim()
+          if (content) {
+            sections.push({ type, title, content })
+            matched = true
+          }
+          break
+        }
+      }
+      
+      if (!matched && trimmedItem) {
+        // Check if it's a recommendation-like item
+        if (/рекоменд|ұсын|совет|follow|need|should/i.test(trimmedItem)) {
+          sections.push({ type: "recommendations", title: "Ұсыныстар / Рекомендации", content: trimmedItem })
+        } else {
+          sections.push({ type: "other", title: "Ақпарат / Информация", content: trimmedItem })
+        }
+      }
+    })
+  } else {
+    // Try to split by line breaks and look for section headers
+    const lines = summary.split(/\n+/).filter(line => line.trim())
+    let currentSection: SummarySection | null = null
+    
+    lines.forEach(line => {
+      const trimmedLine = line.trim()
+      let foundHeader = false
+      
+      for (const { pattern, type, title } of sectionPatterns) {
+        if (pattern.test(trimmedLine)) {
+          if (currentSection) {
+            sections.push(currentSection)
+          }
+          const content = trimmedLine.replace(pattern, "").trim()
+          currentSection = { type, title, content }
+          foundHeader = true
+          break
+        }
+      }
+      
+      if (!foundHeader && currentSection) {
+        currentSection.content += "\n" + trimmedLine
+      } else if (!foundHeader && !currentSection) {
+        currentSection = { type: "conclusion", title: "Қорытынды / Заключение", content: trimmedLine }
+      }
+    })
+    
+    if (currentSection) {
+      sections.push(currentSection)
+    }
+  }
+  
+  // If we didn't find any structure, return the whole thing as one section
+  if (sections.length === 0 && summary.trim()) {
+    return [{ type: "conclusion", title: "Қорытынды / Резюме", content: summary.trim() }]
+  }
+  
+  // Merge sections with same type
+  const merged: SummarySection[] = []
+  sections.forEach(section => {
+    const existing = merged.find(s => s.type === section.type)
+    if (existing) {
+      existing.content += "\n" + section.content
+    } else {
+      merged.push({ ...section })
+    }
+  })
+  
+  return merged
+}
+
+function getSectionStyle(type: SummarySection["type"]): { bg: string } {
+  const styles: Record<SummarySection["type"], { bg: string }> = {
+    general: { bg: "bg-gradient-to-br from-blue-500/20 to-cyan-500/20" },
+    sleep: { bg: "bg-gradient-to-br from-indigo-500/20 to-purple-500/20" },
+    mood: { bg: "bg-gradient-to-br from-pink-500/20 to-rose-500/20" },
+    stress: { bg: "bg-gradient-to-br from-orange-500/20 to-amber-500/20" },
+    symptoms: { bg: "bg-gradient-to-br from-red-500/20 to-rose-500/20" },
+    conclusion: { bg: "bg-emerald-500/20" },
+    recommendations: { bg: "bg-amber-500/20" },
+    other: { bg: "bg-slate-500/20" },
+  }
+  return styles[type]
+}
+
+function getSectionIcon(type: SummarySection["type"]) {
+  const icons: Record<SummarySection["type"], JSX.Element> = {
+    general: <Activity className="w-5 h-5 text-blue-400" />,
+    sleep: <Moon className="w-5 h-5 text-indigo-400" />,
+    mood: <Heart className="w-5 h-5 text-pink-400" />,
+    stress: <Zap className="w-5 h-5 text-orange-400" />,
+    symptoms: <Brain className="w-5 h-5 text-red-400" />,
+    conclusion: <CheckCircle2 className="w-5 h-5 text-emerald-400" />,
+    recommendations: <FileText className="w-5 h-5 text-amber-400" />,
+    other: <FileText className="w-5 h-5 text-slate-400" />,
+  }
+  return icons[type]
+}
+
 type TabType = "consultations" | "voice"
 
 export default function ReportsPage() {
@@ -681,13 +815,49 @@ ${selectedConsultation.rawDialogue || "—"}
                       </div>
                     )}
 
-                    {/* Report Content */}
-                    <div className="p-6">
-                      <div className="p-4 rounded-xl bg-muted/20">
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                          {selectedVoiceReport.summary}
-                        </p>
-                      </div>
+                    {/* Report Content - Structured Summary */}
+                    <div className="p-6 space-y-4">
+                      {parseSummary(selectedVoiceReport.summary).map((section, index) => (
+                        <div 
+                          key={index}
+                          className={cn(
+                            "rounded-xl border p-5 transition-colors",
+                            section.type === "conclusion" 
+                              ? "bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/20" 
+                              : section.type === "recommendations"
+                                ? "bg-gradient-to-br from-amber-500/10 to-yellow-500/10 border-amber-500/20"
+                                : "bg-background/60"
+                          )}
+                        >
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className={cn(
+                              "w-10 h-10 rounded-xl flex items-center justify-center",
+                              getSectionStyle(section.type).bg
+                            )}>
+                              {getSectionIcon(section.type)}
+                            </div>
+                            <h4 className="font-semibold">{section.title}</h4>
+                          </div>
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                            {section.content}
+                          </p>
+                        </div>
+                      ))}
+                      
+                      {/* If no sections found, show raw text nicely */}
+                      {parseSummary(selectedVoiceReport.summary).length === 0 && (
+                        <div className="rounded-xl border bg-background/60 p-5">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                              <FileText className="w-5 h-5 text-emerald-400" />
+                            </div>
+                            <h4 className="font-semibold">Қорытынды / Резюме</h4>
+                          </div>
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                            {selectedVoiceReport.summary}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Footer */}

@@ -135,39 +135,145 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
     r.summary.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
-  // Parse summary into sections
-  const parseSummary = (summary: string): { title: string; content: string; iconType: string }[] | null => {
-    const sections: { title: string; content: string; iconType: string }[] = []
+  type SectionType = "general" | "sleep" | "mood" | "stress" | "symptoms" | "conclusion" | "recommendations" | "other"
+  
+  interface SummarySection {
+    type: SectionType
+    title: string
+    content: string
+  }
+  
+  const parseSummary = (summary: string): SummarySection[] => {
+    if (!summary) return []
     
-    const patterns = [
-      { regex: /ЖАЛПЫ ЖАҒДАЙ[\s\S]*?ОБЩЕЕ СОСТОЯНИЕ[:\s]*([\s\S]*?)(?=ҰЙҚЫ|СОН|$)/i, title: "Жалпы жағдай", iconType: "heart" },
-      { regex: /ҰЙҚЫ[\s\S]*?СОН[:\s]*([\s\S]*?)(?=КӨҢІЛ|НАСТРОЕНИЕ|$)/i, title: "Ұйқы", iconType: "moon" },
-      { regex: /КӨҢІЛ-КҮЙ[\s\S]*?НАСТРОЕНИЕ[:\s]*([\s\S]*?)(?=СТРЕСС|$)/i, title: "Көңіл-күй", iconType: "brain" },
-      { regex: /СТРЕСС ДЕҢГЕЙІ[\s\S]*?УРОВЕНЬ СТРЕССА[:\s]*([\s\S]*?)(?=ФИЗИКАЛЫҚ|ФИЗИЧЕСКИЕ|$)/i, title: "Стресс деңгейі", iconType: "activity" },
-      { regex: /ФИЗИКАЛЫҚ[\s\S]*?ФИЗИЧЕСКИЕ СИМПТОМЫ[:\s]*([\s\S]*?)(?=КОГНИТИВТІ|КОГНИТИВНЫЕ|$)/i, title: "Физикалық симптомдар", iconType: "stethoscope" },
-      { regex: /ҚОРЫТЫНДЫ[\s\S]*?ЗАКЛЮЧЕНИЕ[:\s]*([\s\S]*?)(?=ҰСЫНЫСТАР|РЕКОМЕНДАЦИИ|$)/i, title: "Қорытынды", iconType: "check" },
-      { regex: /ҰСЫНЫСТАР[\s\S]*?РЕКОМЕНДАЦИИ[:\s]*([\s\S]*?)$/i, title: "Ұсыныстар", iconType: "file" },
+    const sections: SummarySection[] = []
+    
+    const sectionPatterns = [
+      { pattern: /(?:жалпы жағдай|общее состояние|general condition)[:\s]*/gi, type: "general" as const, title: "Жалпы жағдай / Общее состояние" },
+      { pattern: /(?:ұйқы|сон|sleep)[:\s]*/gi, type: "sleep" as const, title: "Ұйқы / Сон" },
+      { pattern: /(?:көңіл-күй|настроение|mood)[:\s]*/gi, type: "mood" as const, title: "Көңіл-күй / Настроение" },
+      { pattern: /(?:стресс|stress)[:\s]*/gi, type: "stress" as const, title: "Стресс / Уровень стресса" },
+      { pattern: /(?:симптом|symptom|белгі)[:\s]*/gi, type: "symptoms" as const, title: "Симптомдар / Симптомы" },
+      { pattern: /(?:қорытынды|заключение|conclusion|резюме|summary)[:\s]*/gi, type: "conclusion" as const, title: "Қорытынды / Заключение" },
+      { pattern: /(?:ұсыныс|рекоменд|recommendation)[:\s]*/gi, type: "recommendations" as const, title: "Ұсыныстар / Рекомендации" },
     ]
     
-    for (const { regex, title, iconType } of patterns) {
-      const match = summary.match(regex)
-      if (match && match[1]?.trim()) {
-        sections.push({ title, content: match[1].trim(), iconType })
+    const numberedPattern = /(?:^|\n)(?:\d+[\.\)]\s*|[-•]\s*)/g
+    const hasBullets = numberedPattern.test(summary)
+    
+    if (hasBullets) {
+      const items = summary.split(/(?:^|\n)(?:\d+[\.\)]\s*|[-•]\s*)/).filter(item => item.trim())
+      
+      items.forEach(item => {
+        const trimmedItem = item.trim()
+        let matched = false
+        
+        for (const { pattern, type, title } of sectionPatterns) {
+          if (pattern.test(trimmedItem)) {
+            const content = trimmedItem.replace(pattern, "").trim()
+            if (content) {
+              sections.push({ type, title, content })
+              matched = true
+            }
+            break
+          }
+        }
+        
+        if (!matched && trimmedItem) {
+          if (/рекоменд|ұсын|совет|follow|need|should/i.test(trimmedItem)) {
+            sections.push({ type: "recommendations", title: "Ұсыныстар / Рекомендации", content: trimmedItem })
+          } else {
+            sections.push({ type: "other", title: "Ақпарат / Информация", content: trimmedItem })
+          }
+        }
+      })
+    } else {
+      const lines = summary.split(/\n+/).filter(line => line.trim())
+      let currentSection: SummarySection | null = null
+      
+      lines.forEach(line => {
+        const trimmedLine = line.trim()
+        let foundHeader = false
+        
+        for (const { pattern, type, title } of sectionPatterns) {
+          if (pattern.test(trimmedLine)) {
+            if (currentSection) {
+              sections.push(currentSection)
+            }
+            const content = trimmedLine.replace(pattern, "").trim()
+            currentSection = { type, title, content }
+            foundHeader = true
+            break
+          }
+        }
+        
+        if (!foundHeader && currentSection) {
+          currentSection.content += "\n" + trimmedLine
+        } else if (!foundHeader && !currentSection) {
+          currentSection = { type: "conclusion", title: "Қорытынды / Заключение", content: trimmedLine }
+        }
+      })
+      
+      if (currentSection) {
+        sections.push(currentSection)
       }
     }
     
-    return sections.length > 0 ? sections : null
+    if (sections.length === 0 && summary.trim()) {
+      return [{ type: "conclusion", title: "Қорытынды / Резюме", content: summary.trim() }]
+    }
+    
+    const merged: SummarySection[] = []
+    sections.forEach(section => {
+      const existing = merged.find(s => s.type === section.type)
+      if (existing) {
+        existing.content += "\n" + section.content
+      } else {
+        merged.push({ ...section })
+      }
+    })
+    
+    return merged
   }
 
-  const getIcon = (type: string) => {
+  const getSectionStyle = (type: SectionType): { bg: string; border: string } => {
+    const styles: Record<SectionType, { bg: string; border: string }> = {
+      general: { bg: "bg-gradient-to-br from-blue-500/10 to-cyan-500/10", border: "border-blue-500/20" },
+      sleep: { bg: "bg-gradient-to-br from-indigo-500/10 to-purple-500/10", border: "border-indigo-500/20" },
+      mood: { bg: "bg-gradient-to-br from-pink-500/10 to-rose-500/10", border: "border-pink-500/20" },
+      stress: { bg: "bg-gradient-to-br from-orange-500/10 to-amber-500/10", border: "border-orange-500/20" },
+      symptoms: { bg: "bg-gradient-to-br from-red-500/10 to-rose-500/10", border: "border-red-500/20" },
+      conclusion: { bg: "bg-gradient-to-br from-emerald-500/10 to-teal-500/10", border: "border-emerald-500/20" },
+      recommendations: { bg: "bg-gradient-to-br from-amber-500/10 to-yellow-500/10", border: "border-amber-500/20" },
+      other: { bg: "bg-slate-500/10", border: "border-slate-500/20" },
+    }
+    return styles[type]
+  }
+
+  const getSectionIconBg = (type: SectionType): string => {
+    const bgs: Record<SectionType, string> = {
+      general: "bg-gradient-to-br from-blue-500/20 to-cyan-500/20",
+      sleep: "bg-gradient-to-br from-indigo-500/20 to-purple-500/20",
+      mood: "bg-gradient-to-br from-pink-500/20 to-rose-500/20",
+      stress: "bg-gradient-to-br from-orange-500/20 to-amber-500/20",
+      symptoms: "bg-gradient-to-br from-red-500/20 to-rose-500/20",
+      conclusion: "bg-emerald-500/20",
+      recommendations: "bg-amber-500/20",
+      other: "bg-slate-500/20",
+    }
+    return bgs[type]
+  }
+
+  const getSectionIcon = (type: SectionType) => {
     switch (type) {
-      case "heart": return <Heart className="w-4 h-4 text-rose-500" />
-      case "moon": return <Moon className="w-4 h-4 text-indigo-500" />
-      case "brain": return <Brain className="w-4 h-4 text-purple-500" />
-      case "activity": return <Activity className="w-4 h-4 text-amber-500" />
-      case "check": return <FileText className="w-4 h-4 text-emerald-500" />
-      case "file": return <FileText className="w-4 h-4 text-teal-500" />
-      default: return <FileText className="w-4 h-4 text-gray-500" />
+      case "general": return <Activity className="w-5 h-5 text-blue-400" />
+      case "sleep": return <Moon className="w-5 h-5 text-indigo-400" />
+      case "mood": return <Heart className="w-5 h-5 text-pink-400" />
+      case "stress": return <Activity className="w-5 h-5 text-orange-400" />
+      case "symptoms": return <Brain className="w-5 h-5 text-red-400" />
+      case "conclusion": return <FileText className="w-5 h-5 text-emerald-400" />
+      case "recommendations": return <FileText className="w-5 h-5 text-amber-400" />
+      default: return <FileText className="w-5 h-5 text-slate-400" />
     }
   }
 
@@ -333,24 +439,37 @@ ${selectedReport.urgentAttention ? "⚠️ ТРЕБУЕТ СРОЧНОГО ВН�
                       </div>
                     </div>
 
-                    {/* Report Content */}
-                    <div className="p-6">
-                      {parseSummary(selectedReport.summary) ? (
-                        <div className="space-y-4">
-                          {parseSummary(selectedReport.summary)?.map((section, idx) => (
-                            <div key={idx} className="p-4 rounded-xl bg-muted/20 border border-muted/30">
-                              <div className="flex items-center gap-2 mb-2">
-                                {getIcon(section.iconType)}
-                                <h4 className="font-semibold text-sm">{section.title}</h4>
+                    {/* Report Content - Structured Summary */}
+                    <div className="p-6 space-y-4">
+                      {parseSummary(selectedReport.summary).map((section, index) => {
+                        const style = getSectionStyle(section.type)
+                        return (
+                          <div 
+                            key={index}
+                            className={`rounded-xl border p-5 transition-colors ${style.bg} ${style.border}`}
+                          >
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${getSectionIconBg(section.type)}`}>
+                                {getSectionIcon(section.type)}
                               </div>
-                              <p className="text-sm text-muted-foreground leading-relaxed">
-                                {section.content}
-                              </p>
+                              <h4 className="font-semibold">{section.title}</h4>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="p-4 rounded-xl bg-muted/20 border">
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                              {section.content}
+                            </p>
+                          </div>
+                        )
+                      })}
+                      
+                      {/* Fallback if no sections */}
+                      {parseSummary(selectedReport.summary).length === 0 && (
+                        <div className="rounded-xl border bg-background/60 p-5">
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                              <FileText className="w-5 h-5 text-emerald-400" />
+                            </div>
+                            <h4 className="font-semibold">Қорытынды / Резюме</h4>
+                          </div>
                           <p className="text-sm leading-relaxed whitespace-pre-wrap">
                             {selectedReport.summary}
                           </p>
