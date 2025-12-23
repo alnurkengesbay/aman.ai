@@ -588,9 +588,8 @@ ${selectedConsultation.rawDialogue || "—"}
                                 year: "numeric"
                               })}
                             </p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-2">
-                              <Clock className="w-3 h-3" />
-                              {formatDuration(report.callDuration)}
+                            <p className="text-xs text-muted-foreground truncate">
+                              {report.summary ? report.summary.substring(0, 40) + (report.summary.length > 40 ? "..." : "") : "Есеп"}
                             </p>
                           </div>
                           <ChevronRight className="w-4 h-4 text-muted-foreground" />
@@ -636,9 +635,6 @@ ${selectedConsultation.rawDialogue || "—"}
                               year: "numeric"
                             })}
                           </h2>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Сөйлесу ұзақтығы: {formatDuration(selectedVoiceReport.callDuration)}
-                          </p>
                         </div>
                         
                         <button
@@ -651,29 +647,39 @@ ${selectedConsultation.rawDialogue || "—"}
                       </div>
                     </div>
 
-                    {/* Quick Stats */}
-                    <div className="grid grid-cols-4 border-b">
-                      <div className="p-4 text-center border-r">
-                        <Heart className="w-5 h-5 text-rose-500 mx-auto mb-1" />
-                        <p className="text-lg font-bold">{selectedVoiceReport.generalWellbeing || "—"}</p>
-                        <p className="text-xs text-muted-foreground">Жағдай</p>
+                    {/* Quick Stats - only show if at least one has data */}
+                    {(selectedVoiceReport.generalWellbeing || selectedVoiceReport.sleepQuality || selectedVoiceReport.moodState || selectedVoiceReport.stressLevel) && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border-b">
+                        {selectedVoiceReport.generalWellbeing && (
+                          <div className="p-4 rounded-xl bg-rose-500/10 text-center">
+                            <Heart className="w-6 h-6 text-rose-500 mx-auto mb-2" />
+                            <p className="text-2xl font-bold text-rose-400">{selectedVoiceReport.generalWellbeing}/10</p>
+                            <p className="text-xs text-muted-foreground mt-1">Жағдай</p>
+                          </div>
+                        )}
+                        {selectedVoiceReport.sleepQuality && (
+                          <div className="p-4 rounded-xl bg-indigo-500/10 text-center">
+                            <Moon className="w-6 h-6 text-indigo-500 mx-auto mb-2" />
+                            <p className="text-lg font-bold text-indigo-400">{selectedVoiceReport.sleepQuality}</p>
+                            <p className="text-xs text-muted-foreground mt-1">Ұйқы</p>
+                          </div>
+                        )}
+                        {selectedVoiceReport.moodState && (
+                          <div className="p-4 rounded-xl bg-purple-500/10 text-center">
+                            <Brain className="w-6 h-6 text-purple-500 mx-auto mb-2" />
+                            <p className="text-lg font-bold text-purple-400">{selectedVoiceReport.moodState}</p>
+                            <p className="text-xs text-muted-foreground mt-1">Көңіл-күй</p>
+                          </div>
+                        )}
+                        {selectedVoiceReport.stressLevel && (
+                          <div className="p-4 rounded-xl bg-amber-500/10 text-center">
+                            <Activity className="w-6 h-6 text-amber-500 mx-auto mb-2" />
+                            <p className="text-lg font-bold text-amber-400">{selectedVoiceReport.stressLevel}</p>
+                            <p className="text-xs text-muted-foreground mt-1">Стресс</p>
+                          </div>
+                        )}
                       </div>
-                      <div className="p-4 text-center border-r">
-                        <Moon className="w-5 h-5 text-indigo-500 mx-auto mb-1" />
-                        <p className="text-lg font-bold">{selectedVoiceReport.sleepQuality || "—"}</p>
-                        <p className="text-xs text-muted-foreground">Ұйқы</p>
-                      </div>
-                      <div className="p-4 text-center border-r">
-                        <Brain className="w-5 h-5 text-purple-500 mx-auto mb-1" />
-                        <p className="text-lg font-bold">{selectedVoiceReport.moodState || "—"}</p>
-                        <p className="text-xs text-muted-foreground">Көңіл-күй</p>
-                      </div>
-                      <div className="p-4 text-center">
-                        <Activity className="w-5 h-5 text-amber-500 mx-auto mb-1" />
-                        <p className="text-lg font-bold">{selectedVoiceReport.stressLevel || "—"}</p>
-                        <p className="text-xs text-muted-foreground">Стресс</p>
-                      </div>
-                    </div>
+                    )}
 
                     {/* Report Content */}
                     <div className="p-6">
